@@ -1,13 +1,48 @@
 
-
 const express = require("express");
 const router = express.Router();
 
 console.log("AUTH ROUTE LOADED");
 
 const User = require("../models/User");
+const Counter = require("../models/Counter");
+
 const jwt = require("jsonwebtoken");
 const rubikaBot = require("../rubika/bot");
+
+
+// ======================================================
+// ساخت شماره داوطلبی جدید
+// ======================================================
+
+async function getNextCandidateNumber() {
+
+    const counter =
+        await Counter.findOneAndUpdate(
+
+            {
+                name: "candidateNumber"
+            },
+
+            {
+                $inc: {
+                    sequence: 1
+                }
+            },
+
+            {
+                new: true,
+                upsert: true
+            }
+
+        );
+
+
+    return String(
+        counter.sequence
+    );
+
+}
 
 
 // ======================================================
@@ -18,19 +53,31 @@ router.post("/send-otp", async (req, res) => {
 
     try {
 
-        const { phone, chatId } = req.body;
+        const {
+            phone,
+            chatId
+        } = req.body;
 
+
+        // ==================================================
+        // بررسی اطلاعات
+        // ==================================================
 
         if (!phone || !chatId) {
 
             return res.status(400).json({
-                message: "شماره تلفن و شناسه روبیکا وارد نشده است"
+
+                message:
+                    "شماره تلفن و شناسه روبیکا وارد نشده است"
+
             });
 
         }
 
 
-        // ساخت کد ۴ رقمی
+        // ==================================================
+        // ساخت OTP
+        // ==================================================
 
         const otp =
             Math.floor(
@@ -39,7 +86,10 @@ router.post("/send-otp", async (req, res) => {
             ).toString();
 
 
-        // زمان انقضا: ۲ دقیقه
+        // ==================================================
+        // زمان انقضا
+        // 2 دقیقه
+        // ==================================================
 
         const otpExpire =
             new Date(
@@ -48,27 +98,41 @@ router.post("/send-otp", async (req, res) => {
             );
 
 
+        // ==================================================
+        // پیدا کردن کاربر
+        // ==================================================
+
         let user =
             await User.findOne({
                 phone
             });
 
 
-            if (user) {
+        // ==================================================
+        // کاربر قبلاً وجود دارد
+        // ==================================================
+
+        if (user) {
+
+            user.otp =
+                otp;
+
+            user.otpExpire =
+                otpExpire;
+
+            user.chatId =
+                chatId;
+
+        }
 
 
-                user.otp = otp;
-
-                user.otpExpire = otpExpire;
-
-                user.chatId = chatId;
-
-
-            }
+        // ==================================================
+        // کاربر جدید
+        // ==================================================
 
         else {
 
-                user =
+            user =
                 new User({
 
                     phone,
@@ -77,23 +141,43 @@ router.post("/send-otp", async (req, res) => {
 
                     otp,
 
-                    otpExpire
+                    otpExpire,
+
+                    // هنوز حساب ساخته نشده
+                    // کد داوطلبی بعد از تایید OTP ساخته می‌شود
+                    candidateNumber: null
 
                 });
 
         }
 
 
+        // ==================================================
+        // ذخیره کاربر موقت
+        // ==================================================
+
         await user.save();
 
 
-        // فعلاً فقط برای تست
+        // ==================================================
+        // ارسال OTP
+        // ==================================================
 
-await rubikaBot.sendOTP(
-    chatId,
-    otp
-);
+        await rubikaBot.sendOTP(
+            chatId,
+            otp
+        );
 
+
+        console.log(
+            "OTP SENT:",
+            phone
+        );
+
+
+        // ==================================================
+        // پاسخ
+        // ==================================================
 
         res.json({
 
@@ -102,8 +186,8 @@ await rubikaBot.sendOTP(
 
         });
 
-
     }
+
 
     catch (error) {
 
@@ -128,6 +212,7 @@ await rubikaBot.sendOTP(
 
 // ======================================================
 // تایید کد OTP
+// ساخت نهایی حساب + اختصاص شماره داوطلبی
 // ======================================================
 
 router.post("/verify-otp", async (req, res) => {
@@ -143,6 +228,10 @@ router.post("/verify-otp", async (req, res) => {
         } = req.body;
 
 
+        // ==================================================
+        // بررسی اطلاعات
+        // ==================================================
+
         if (!phone || !otp) {
 
             return res.status(400).json({
@@ -154,6 +243,10 @@ router.post("/verify-otp", async (req, res) => {
 
         }
 
+
+        // ==================================================
+        // پیدا کردن کاربر
+        // ==================================================
 
         const user =
             await User.findOne({
@@ -193,10 +286,12 @@ router.post("/verify-otp", async (req, res) => {
 
 
         // ==================================================
-        // بررسی کد
+        // بررسی OTP
         // ==================================================
 
-        if (user.otp !== otp) {
+        if (
+            user.otp !== otp
+        ) {
 
             return res.status(400).json({
 
@@ -209,20 +304,43 @@ router.post("/verify-otp", async (req, res) => {
 
 
         // ==================================================
-        // تایید کاربر
+        // تکمیل اطلاعات حساب
         // ==================================================
 
         user.fullname =
-            fullname;
+            fullname || null;
 
         user.email =
-            email;
+            email || null;
 
         user.password =
-            password;
+            password || null;
+
+
+        // ==================================================
+        // اختصاص شماره داوطلبی
+        // فقط هنگام ساخت حساب
+        // ==================================================
+
+        if (!user.candidateNumber) {
+
+            user.candidateNumber =
+                await getNextCandidateNumber();
+
+        }
+
+
+        // ==================================================
+        // تایید نهایی حساب
+        // ==================================================
 
         user.verified =
             true;
+
+
+        // ==================================================
+        // پاک کردن OTP
+        // ==================================================
 
         user.otp =
             null;
@@ -231,18 +349,59 @@ router.post("/verify-otp", async (req, res) => {
             null;
 
 
+        // ==================================================
+        // ذخیره حساب نهایی
+        // ==================================================
+
         await user.save();
 
+
+        console.log(
+            "ACCOUNT CREATED:",
+            user.phone
+        );
+
+        console.log(
+            "CANDIDATE NUMBER:",
+            user.candidateNumber
+        );
+
+
+        // ==================================================
+        // پاسخ موفق
+        // ==================================================
 
         res.json({
 
             message:
-                "کد تایید شد"
+                "حساب با موفقیت ساخته شد",
+
+            user: {
+
+                id:
+                    user._id,
+
+                fullname:
+                    user.fullname,
+
+                email:
+                    user.email,
+
+                phone:
+                    user.phone,
+
+                candidateNumber:
+                    user.candidateNumber,
+
+                chatId:
+                    user.chatId
+
+            }
 
         });
 
-
     }
+
 
     catch (error) {
 
@@ -412,6 +571,17 @@ router.post("/login", async (req, res) => {
 
 
         // ==================================================
+        // ثبت آخرین ورود
+        // ==================================================
+
+        user.lastLoginAt =
+            new Date();
+
+
+        await user.save();
+
+
+        // ==================================================
         // ساخت JWT
         // ==================================================
 
@@ -446,7 +616,6 @@ router.post("/login", async (req, res) => {
             message:
                 "ورود موفق بود",
 
-
             token,
 
             user: {
@@ -463,6 +632,45 @@ router.post("/login", async (req, res) => {
                 phone:
                     user.phone,
 
+                candidateNumber:
+                    user.candidateNumber,
+
+                studyDays:
+                    user.studyDays,
+
+                league:
+                    user.league,
+
+                completedExams:
+                    user.completedExams,
+
+                previousScore:
+                    user.previousScore,
+
+                totalQuestionsAnswered:
+                    user.totalQuestionsAnswered,
+
+                totalCorrectAnswers:
+                    user.totalCorrectAnswers,
+
+                totalWrongAnswers:
+                    user.totalWrongAnswers,
+
+                totalStudyMinutes:
+                    user.totalStudyMinutes,
+
+                targetField:
+                    user.targetField,
+
+                targetUniversity:
+                    user.targetUniversity,
+
+                profileImage:
+                    user.profileImage,
+
+                bio:
+                    user.bio,
+
                 chatId:
                     user.chatId
 
@@ -470,8 +678,8 @@ router.post("/login", async (req, res) => {
 
         });
 
-
     }
+
 
     catch (error) {
 
@@ -486,6 +694,116 @@ router.post("/login", async (req, res) => {
 
             message:
                 "خطای سرور"
+
+        });
+
+    }
+
+});
+
+
+// ======================================================
+// دریافت اطلاعات کاربر فعلی
+// ======================================================
+
+router.get("/me", async (req, res) => {
+
+    try {
+
+        const authHeader =
+            req.headers.authorization;
+
+
+        if (!authHeader) {
+
+            return res.status(401).json({
+
+                message:
+                    "توکن ارسال نشده است"
+
+            });
+
+        }
+
+
+        const token =
+            authHeader.split(" ")[1];
+
+
+        if (!token) {
+
+            return res.status(401).json({
+
+                message:
+                    "توکن نامعتبر است"
+
+            });
+
+        }
+
+
+        // ==================================================
+        // بررسی JWT
+        // ==================================================
+
+        const decoded =
+            jwt.verify(
+                token,
+                process.env.JWT_SECRET
+            );
+
+
+        // ==================================================
+        // پیدا کردن کاربر
+        // ==================================================
+
+        const user =
+            await User.findById(
+                decoded.userId
+            )
+            .select(
+                "-password -otp -otpExpire"
+            );
+
+
+        if (!user) {
+
+            return res.status(404).json({
+
+                message:
+                    "کاربر پیدا نشد"
+
+            });
+
+        }
+
+
+        // ==================================================
+        // ارسال اطلاعات
+        // ==================================================
+
+        res.json({
+
+            user
+
+        });
+
+    }
+
+
+    catch (error) {
+
+        console.log(
+            "ME ROUTE ERROR:"
+        );
+
+        console.log(error);
+
+
+        return res.status(401).json({
+
+            message:
+                "احراز هویت نامعتبر است"
 
         });
 
