@@ -39,9 +39,8 @@ async function getNextCandidateNumber() {
 
 
     return String(
-        counter.sequence
+        100000 + counter.sequence
     );
-
 }
 
 

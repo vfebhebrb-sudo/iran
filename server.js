@@ -37,6 +37,21 @@ const chatRoutes = require("./routes/chat");
 const aiRoutes = require("./routes/ai-test");
 const testRoutes = require("./routes/tests");
 const adminTestRoutes = require("./routes/adminTests");
+const examResultsRoute =require("./routes/examResults");
+const resultRoutes = require("./routes/results");
+const analysisRoutes = require("./routes/analysis");
+const adminResultsRoutes =
+require("./routes/adminResults");
+const examSubmissionRoute =
+require("./routes/examSubmission");
+const examAnswersRoutes =
+require("./routes/examAnswers");
+const adminAnalysisRoutes =
+require("./routes/adminAnalysis");
+
+
+const userResultsRoutes =
+require("./routes/userResults");
 
 
 
@@ -53,7 +68,7 @@ let telegramBot = null;
 
 try {
 
-    telegramBot = require("./telegram/bot");
+    // telegramBot = require("./telegram/bot");
 
 } catch(error) {
 
@@ -137,8 +152,44 @@ app.use(
     adminTestRoutes
 );
 
+app.use(
+"/api/exams",
+examResultsRoute
+);
 
+app.use(
+"/api/results",
+resultRoutes
+);
 
+app.use(
+"/api/analysis",
+analysisRoutes
+);
+
+app.use(
+"/api/admin/results",
+adminResultsRoutes
+);
+
+app.use(
+"/api/exam-submission",
+examSubmissionRoute
+);
+
+app.use(
+"/api/exam-answers",
+examAnswersRoutes
+);
+
+app.use(
+"/api/admin/analysis",
+adminAnalysisRoutes
+);
+app.use(
+"/api/results",
+userResultsRoutes
+);
 // ======================================================
 // TEST
 // ======================================================
