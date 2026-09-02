@@ -53,8 +53,14 @@ require("./routes/adminAnalysis");
 const userResultsRoutes =
 require("./routes/userResults");
 
+const smartAssistantRouter =
+    require("./routes/smartAssistantRoute");
 
 
+    const smartAssistantContextRouter =
+    require("./routes/smartAssistantContextRoute");
+
+    const smartAssistantSettingsRouter = require("./routes/smartAssistantSettingsRoute");
 // ======================================================
 // BOTS
 // ======================================================
@@ -190,6 +196,21 @@ app.use(
 "/api/results",
 userResultsRoutes
 );
+
+
+app.use(
+    "/api/smart-assistant",
+    smartAssistantRouter
+);
+
+
+app.use(
+    "/api/smart-assistant/context",
+    smartAssistantContextRouter
+);
+
+
+app.use( "/api/smart-assistant/settings", smartAssistantSettingsRouter );
 // ======================================================
 // TEST
 // ======================================================
