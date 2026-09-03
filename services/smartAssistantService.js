@@ -5,19 +5,20 @@ const OpenAI = require("openai");
 // ======================================================
 // 🤖 SMART ASSISTANT — AI CLIENT
 // ======================================================
-
-const smartAssistantClient =
-    new OpenAI({
-
-        apiKey:
-            process.env.SMART_ASSISTANT_GAPGPT_KEY,
-
-        baseURL:
-            "https://api.gapgpt.app/v1"
-
-    });
+const createAIClient =
+    require("../config/aiClient");
 
 
+const {
+    client,
+    model,
+    provider
+} =
+    createAIClient();
+
+// ======================================================
+// 🧠 PREPARE CONVERSATION MEMORY
+// ======================================================
 // ======================================================
 // 🧠 PREPARE CONVERSATION MEMORY
 // ======================================================
@@ -44,7 +45,7 @@ function prepareConversationHistory(
             );
 
         })
-        .slice(-1000)
+        .slice(-15)
         .map(item => ({
 
             role:
@@ -56,7 +57,6 @@ function prepareConversationHistory(
         }));
 
 }
-
 
 // ======================================================
 // 🤖 RUN NORMAL SMART ASSISTANT
@@ -365,8 +365,8 @@ ${JSON.stringify(
             .completions
             .create({
 
-                model:
-                    "gpt-4o",
+           model:
+    model,
 
                 messages:
                     messages
@@ -594,9 +594,8 @@ ${message}
                 .chat
                 .completions
                 .create({
-
-                    model:
-                        "gpt-4o",
+model:
+    model,
 
                     messages:[
 

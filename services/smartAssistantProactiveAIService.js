@@ -1,19 +1,13 @@
-
-const OpenAI = require("openai");
-
-
-const client =
-    new OpenAI({
-
-        apiKey:
-            process.env.SMART_ASSISTANT_GAPGPT_KEY,
-
-        baseURL:
-            "https://api.gapgpt.app/v1"
-
-    });
+const createAIClient =
+    require("../config/aiClient");
 
 
+const {
+    client,
+    model,
+    provider
+} =
+    createAIClient();
 // ======================================================
 // PROACTIVE AI SYSTEM PROMPT
 // ======================================================
@@ -584,8 +578,8 @@ async function generateSmartAssistantProactiveDecision({
         const response =
             await client.chat.completions.create({
 
-                model:
-                    "gpt-4o",
+               model:
+    model,
 
                 temperature:
                     0.7,

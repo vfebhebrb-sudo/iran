@@ -61,6 +61,8 @@ const smartAssistantRouter =
     require("./routes/smartAssistantContextRoute");
 
     const smartAssistantSettingsRouter = require("./routes/smartAssistantSettingsRoute");
+
+
 // ======================================================
 // BOTS
 // ======================================================
@@ -211,6 +213,8 @@ app.use(
 
 
 app.use( "/api/smart-assistant/settings", smartAssistantSettingsRouter );
+
+
 // ======================================================
 // TEST
 // ======================================================
