@@ -10,12 +10,9 @@ const createAIClient =
 
 
 const {
-    client,
-    model,
-    provider
-} =
-    createAIClient();
-
+    client: smartAssistantClient,
+    model
+} = createAIClient();
 // ======================================================
 // 🧠 PREPARE CONVERSATION MEMORY
 // ======================================================
