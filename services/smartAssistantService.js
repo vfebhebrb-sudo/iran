@@ -1,18 +1,62 @@
 
+// const OpenAI = require("openai");
+
+
+// // ======================================================
+// // 🤖 SMART ASSISTANT — AI CLIENT
+// // ======================================================
+// const createAIClient =
+//     require("../config/aiClient");
+
+
+// const {
+//     client: smartAssistantClient,
+//     model
+// } = createAIClient();
+
+// const {
+//     getROBOSettings
+// } =
+// require("./roboSettingsService");
+
+
 const OpenAI = require("openai");
 
 
-// ======================================================
-// 🤖 SMART ASSISTANT — AI CLIENT
-// ======================================================
-const createAIClient =
-    require("../config/aiClient");
-
-
 const {
-    client: smartAssistantClient,
-    model
-} = createAIClient();
+    getROBOSettings
+} =
+require("./roboSettingsService");
+
+
+
+
+
+
+function createROBOClient(settings){
+
+
+    return new OpenAI({
+
+        apiKey:
+            settings.apiKey,
+
+
+        baseURL:
+            settings.provider === "openai"
+
+            ?
+
+            "https://api.openai.com/v1"
+
+            :
+
+            "https://api.gapgpt.app/v1"
+
+    });
+
+
+}
 // ======================================================
 // 🧠 PREPARE CONVERSATION MEMORY
 // ======================================================
@@ -82,6 +126,44 @@ async function runSmartAssistant(
 یعنی باید بتوانی یک گفت‌وگو را در چند پیام ادامه بدهی
 و جواب‌های قبلی کاربر را در نظر بگیری.
 
+
+======================================================
+هویت دستیار
+======================================================
+
+نام تو ROBO (روبو) است.
+
+کاربر ممکن است تو را با نام‌های:
+- روبو
+- ROBO
+- ربات
+- دستیار
+
+صدا بزند.
+
+وقتی کاربر تو را با نام روبو صدا می‌زند، منظورش خود تو هستی.
+
+تو باید بدانی که:
+- نامت روبو است.
+- یک دستیار هوشمند برنامه‌ریزی کنکور هستی.
+- با کاربر رابطه دوستانه و صمیمی داری.
+- نباید بگویی "من یک هوش مصنوعی هستم" مگر اینکه کاربر مستقیم درباره هویتت سؤال کند.
+
+در گفتگوهای عادی می‌توانی از نام خودت استفاده کنی، اما زیاده‌روی نکن.
+
+مثال:
+
+کاربر:
+"روبو امروز چه کار کنم؟"
+
+پاسخ مناسب:
+"امروز بهتره اول برنامه‌های عقب‌افتاده رو بررسی کنیم 💪"
+
+یا:
+
+"آره امیر، روبو اینجاست 😊"
+
+اما همیشه طبیعی صحبت کن و نام خودت را در هر پیام تکرار نکن.
 ==================================================
 وظایف تو
 ==================================================
@@ -355,15 +437,23 @@ ${JSON.stringify(
 
     ];
 
+const roboSettings =
+    await getROBOSettings();
 
+
+const smartAssistantClient =
+    createROBOClient(
+        roboSettings
+    );
+    
     const response =
         await smartAssistantClient
             .chat
             .completions
             .create({
 
-           model:
-    model,
+model:
+    roboSettings.model,
 
                 messages:
                     messages
@@ -586,14 +676,22 @@ ${message}
 
     try{
 
+        const roboSettings =
+    await getROBOSettings();
+
+
+const smartAssistantClient =
+    createROBOClient(
+        roboSettings
+    );
+
         const response =
             await smartAssistantClient
                 .chat
                 .completions
                 .create({
 model:
-    model,
-
+    roboSettings.model,
                     messages:[
 
                         {

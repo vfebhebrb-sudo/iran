@@ -62,7 +62,8 @@ const smartAssistantRouter =
 
     const smartAssistantSettingsRouter = require("./routes/smartAssistantSettingsRoute");
 
-
+const aiAdminRoute =
+require("./routes/aiAdmin");
 // ======================================================
 // BOTS
 // ======================================================
@@ -214,6 +215,10 @@ app.use(
 
 app.use( "/api/smart-assistant/settings", smartAssistantSettingsRouter );
 
+app.use(
+"/api/ai-admin",
+aiAdminRoute
+);
 
 // ======================================================
 // TEST
