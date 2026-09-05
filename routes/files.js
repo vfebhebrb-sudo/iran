@@ -161,9 +161,8 @@ router.get("/:id/open", async (req, res) => {
 
                 success:true,
 
-                url:
-                `http://localhost:3000/temp-files/${fileName}`,
-
+url:
+`${process.env.SERVER_URL}/temp-files/${fileName}`,
                 file:{
 
                     id:file._id,
@@ -306,8 +305,8 @@ router.get("/:id/open", async (req, res) => {
             success:true,
 
 
-            url:
-            `http://localhost:3000/temp-files/${fileName}`,
+url:
+`${process.env.SERVER_URL}/temp-files/${fileName}`,
 
 
 
