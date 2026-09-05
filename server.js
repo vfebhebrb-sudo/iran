@@ -15,6 +15,9 @@ dns.setServers([
 
 
 
+
+
+
 // ======================================================
 // IMPORTS
 // ======================================================
@@ -48,7 +51,7 @@ const examAnswersRoutes =
 require("./routes/examAnswers");
 const adminAnalysisRoutes =
 require("./routes/adminAnalysis");
-
+const path = require("path");
 
 const userResultsRoutes =
 require("./routes/userResults");
@@ -64,6 +67,12 @@ const smartAssistantRouter =
 
 const aiAdminRoute =
 require("./routes/aiAdmin");
+
+
+const filesRoute = require("./routes/files");
+
+const startRubikaBot =
+require("./rubika-bot/riseo");
 // ======================================================
 // BOTS
 // ======================================================
@@ -220,6 +229,40 @@ app.use(
 aiAdminRoute
 );
 
+
+app.use(
+    "/api/files",
+    filesRoute
+);
+
+
+app.use(
+
+    "/temp-files",
+
+    express.static(
+
+        path.join(
+            __dirname,
+            "temp-files"
+        )
+
+    )
+
+);
+
+
+
+
+app.use(
+    "/workspace",
+    express.static(
+        path.join(
+            __dirname,
+            "../workspace"
+        )
+    )
+);
 // ======================================================
 // TEST
 // ======================================================
@@ -332,6 +375,24 @@ async function startServer(){
 
         }
 
+
+
+        try{
+
+            startRubikaBot();
+
+            console.log(
+                "Riseo file bot started ✅"
+            );
+
+        }catch(error){
+
+            console.log(
+                "Riseo bot error ❌",
+                error.message
+            );
+
+        }
 
 
 
