@@ -246,7 +246,6 @@ app.use(
             __dirname,
             "temp-files"
         )
-
     )
 
 );
@@ -259,7 +258,7 @@ app.use(
     express.static(
         path.join(
             __dirname,
-            "../workspace"
+            "workspace"
         )
     )
 );
