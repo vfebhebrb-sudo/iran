@@ -18493,3 +18493,269 @@ if (document.readyState === "interactive" || document.readyState === "complete")
 export { PDFViewerApplication, AppConstants as PDFViewerApplicationConstants, AppOptions as PDFViewerApplicationOptions };
 
 //# sourceMappingURL=viewer.mjs.map
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+// =====================================================
+// RISEO WORKSPACE COMMAND RECEIVER
+// =====================================================
+
+
+window.addEventListener(
+"message",
+(event)=>{
+
+
+const data = event.data;
+
+
+
+if(
+!data ||
+data.type !== "PDF_COMMAND"
+){
+
+return;
+
+}
+
+
+
+console.log(
+"PDF COMMAND:",
+data
+);
+
+
+
+switch(data.command){
+
+
+
+case "zoomIn":
+
+
+document
+.getElementById(
+"zoomInButton"
+)
+?.click();
+
+
+break;
+
+
+
+case "zoomOut":
+
+
+document
+.getElementById(
+"zoomOutButton"
+)
+?.click();
+
+
+break;
+
+
+
+case "fitPage":
+
+
+document
+.getElementById(
+"pageFitButton"
+)
+?.click();
+
+
+break;
+
+
+
+case "fullscreen":
+
+
+document
+.getElementById(
+"presentationMode"
+)
+?.click();
+
+
+break;
+
+
+
+case "select":
+
+
+console.log(
+"Select mode"
+);
+
+
+break;
+
+
+
+case "pencil":
+
+
+console.log(
+"Pencil mode"
+);
+
+
+break;
+
+
+
+case "highlight":
+
+
+console.log(
+"Highlight mode"
+);
+
+
+break;
+
+
+
+case "text":
+
+
+console.log(
+"Text mode"
+);
+
+
+break;
+
+
+
+case "eraser":
+
+
+console.log(
+"Eraser mode"
+);
+
+
+break;
+
+
+
+case "color":
+
+
+console.log(
+"Change color:",
+data.data.color
+);
+
+
+break;
+
+
+
+case "size":
+
+
+console.log(
+"Pen size:",
+data.data.size
+);
+
+
+break;
+
+
+
+case "opacity":
+
+
+console.log(
+"Opacity:",
+data.data.opacity
+);
+
+
+break;
+
+
+
+case "shape":
+
+
+console.log(
+"Shape:",
+data.data.shape
+);
+
+
+break;
+
+
+
+}
+
+
+});
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+window.addEventListener(
+"message",
+(event)=>{
+
+console.log(
+"🔥 MESSAGE FROM WORKSPACE:",
+event.data
+);
+
+
+});

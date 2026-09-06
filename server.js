@@ -254,11 +254,11 @@ app.use(
 
 
 app.use(
-    "/workspace",
+    "/workspace1",
     express.static(
         path.join(
             __dirname,
-            "workspace"
+            "workspace1"
         )
     )
 );

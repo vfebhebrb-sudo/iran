@@ -7485,3 +7485,104 @@ dialog :link{
     display:none;
   }
 }
+
+
+
+
+
+
+
+
+
+/* =====================================
+   CUSTOM PDF PAGES STYLE
+===================================== */
+
+
+#viewerContainer{
+
+    background:#111315 !important;
+
+    padding:40px 0 !important;
+
+}
+
+
+#viewer{
+
+--scale-factor: 1.6666666666666665;
+    margin-top: 120px;
+    display:flex !important;
+
+    flex-direction:column !important;
+
+    align-items:center !important;
+
+    gap:35px !important;
+
+
+}
+
+
+
+/* هر صفحه PDF */
+
+.page{
+
+
+    background:white !important;
+
+
+    box-shadow:
+    0 15px 40px rgba(0,0,0,.35) !important;
+
+
+    border-radius:12px !important;
+
+
+    overflow:hidden !important;
+
+
+    margin:0 auto !important;
+
+
+}
+
+
+
+/* حذف فاصله‌های خود PDF.js */
+
+
+.page{
+
+    border:none !important;
+
+}
+
+
+
+.canvasWrapper{
+
+    border-radius:12px;
+
+}
+
+
+
+
+
+
+
+#viewerContainer:not(.pdfPresentationMode){
+
+    scrollbar-width:none !important;
+    -ms-overflow-style:none !important;
+
+}
+
+
+#viewerContainer:not(.pdfPresentationMode)::-webkit-scrollbar{
+
+    display:none !important;
+
+}
