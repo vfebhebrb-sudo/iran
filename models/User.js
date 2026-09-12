@@ -291,37 +291,65 @@ const userSchema = new mongoose.Schema({
 
     },
 
+// ====================================================
+// ACCOUNT STATUS
+// ====================================================
 
-    // ====================================================
-    // ACCOUNT STATUS
-    // ====================================================
+verified: {
+    type: Boolean,
+    default: false
+},
 
-    verified: {
-        type: Boolean,
-        default: false
-    },
-
-    isActive: {
-        type: Boolean,
-        default: true
-    },
+isActive: {
+    type: Boolean,
+    default: true
+},
 
 
-    // ====================================================
-    // ACCOUNT DATES
-    // ====================================================
+// ====================================================
+// USER ACTIVITY / ONLINE STATUS
+// ====================================================
 
-    lastLoginAt: {
-        type: Date,
-        default: null
-    },
+lastSeenAt: {
+    type: Date,
+    default: null
+},
+
+isOnline: {
+    type: Boolean,
+    default: false
+},
+
+lastLogoutAt: {
+    type: Date,
+    default: null
+},
+
+
+// ====================================================
+// ACCOUNT DATES
+// ====================================================
+
+lastLoginAt: {
+    type: Date,
+    default: null
+},
+
+createdAt: {
+    type: Date,
+    default: Date.now
+},
 
     createdAt: {
         type: Date,
         default: Date.now
     }
 
+    
+
 });
+
+
 
 
 // ======================================================

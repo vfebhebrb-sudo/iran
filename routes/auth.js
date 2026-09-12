@@ -569,15 +569,18 @@ router.post("/login", async (req, res) => {
         }
 
 
-        // ==================================================
-        // ثبت آخرین ورود
-        // ==================================================
+// ==================================================
+// ثبت فعالیت و وضعیت آنلاین
+// ==================================================
 
-        user.lastLoginAt =
-            new Date();
+const now = new Date();
 
+user.lastLoginAt = now;
+user.lastSeenAt = now;
+user.isOnline = true;
+user.lastLogoutAt = null;
 
-        await user.save();
+await user.save();
 
 
         // ==================================================
@@ -810,6 +813,265 @@ router.get("/me", async (req, res) => {
 
 });
 
+
+// ======================================================
+// USER HEARTBEAT
+// به‌روزرسانی آخرین فعالیت کاربر
+// ======================================================
+
+router.post("/heartbeat", async (req, res) => {
+
+    try {
+
+        const authHeader =
+            req.headers.authorization;
+
+        if (!authHeader) {
+
+            return res.status(401).json({
+
+                message:
+                    "توکن ارسال نشده است"
+
+            });
+
+        }
+
+
+        const token =
+            authHeader.split(" ")[1];
+
+
+        if (!token) {
+
+            return res.status(401).json({
+
+                message:
+                    "توکن نامعتبر است"
+
+            });
+
+        }
+
+
+        // ==================================================
+        // بررسی JWT
+        // ==================================================
+
+        const decoded =
+            jwt.verify(
+                token,
+                process.env.JWT_SECRET
+            );
+
+
+        // ==================================================
+        // پیدا کردن کاربر و ثبت فعالیت
+        // ==================================================
+
+        const now =
+            new Date();
+
+
+        const user =
+            await User.findByIdAndUpdate(
+
+                decoded.userId,
+
+                {
+                    $set: {
+                        lastSeenAt: now,
+                        isOnline: true
+                    }
+                },
+
+                {
+                    new: true
+                }
+
+            );
+
+
+        if (!user) {
+
+            return res.status(404).json({
+
+                message:
+                    "کاربر پیدا نشد"
+
+            });
+
+        }
+
+
+        // ==================================================
+        // پاسخ
+        // ==================================================
+
+        res.json({
+
+            success: true,
+
+            lastSeenAt:
+                user.lastSeenAt
+
+        });
+
+    }
+
+
+    catch (error) {
+
+        console.log(
+            "HEARTBEAT ERROR:"
+        );
+
+        console.log(error);
+
+
+        return res.status(401).json({
+
+            message:
+                "احراز هویت نامعتبر است"
+
+        });
+
+    }
+
+});
+
+
+
+
+
+// ======================================================
+// USER LOGOUT
+// ثبت خروج کاربر
+// ======================================================
+
+router.post("/logout", async (req, res) => {
+
+    try {
+
+        const authHeader =
+            req.headers.authorization;
+
+        if (!authHeader) {
+
+            return res.status(401).json({
+
+                message:
+                    "توکن ارسال نشده است"
+
+            });
+
+        }
+
+
+        const token =
+            authHeader.split(" ")[1];
+
+
+        if (!token) {
+
+            return res.status(401).json({
+
+                message:
+                    "توکن نامعتبر است"
+
+            });
+
+        }
+
+
+        // ==================================================
+        // بررسی JWT
+        // ==================================================
+
+        const decoded =
+            jwt.verify(
+                token,
+                process.env.JWT_SECRET
+            );
+
+
+        // ==================================================
+        // ثبت خروج
+        // ==================================================
+
+        const now =
+            new Date();
+
+
+        const user =
+            await User.findByIdAndUpdate(
+
+                decoded.userId,
+
+                {
+                    $set: {
+                        isOnline: false,
+                        lastLogoutAt: now,
+                        lastSeenAt: now
+                    }
+                },
+
+                {
+                    new: true
+                }
+
+            );
+
+
+        if (!user) {
+
+            return res.status(404).json({
+
+                message:
+                    "کاربر پیدا نشد"
+
+            });
+
+        }
+
+
+        console.log(
+            "USER LOGGED OUT:",
+            user.phone
+        );
+
+
+        res.json({
+
+            success: true,
+
+            message:
+                "خروج با موفقیت انجام شد"
+
+        });
+
+    }
+
+
+    catch (error) {
+
+        console.log(
+            "LOGOUT ERROR:"
+        );
+
+        console.log(error);
+
+
+        return res.status(401).json({
+
+            message:
+                "احراز هویت نامعتبر است"
+
+        });
+
+    }
+
+});
 
 // ======================================================
 // خروجی Route
