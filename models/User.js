@@ -163,6 +163,18 @@ const userSchema = new mongoose.Schema({
         trim: true
     },
 
+    // شناسه چت ربات اعلان‌ها
+    notificationChatId: {
+        type: String,
+        default: null,
+        trim: true
+    },
+
+    // فعال / غیرفعال بودن اعلان‌های روبیکا
+    notificationEnabled: {
+        type: Boolean,
+        default: false
+    },
 
     // ====================================================
     // OTP
