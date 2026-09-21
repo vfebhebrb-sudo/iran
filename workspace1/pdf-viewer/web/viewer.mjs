@@ -18493,3 +18493,29 @@ if (document.readyState === "interactive" || document.readyState === "complete")
 export { PDFViewerApplication, AppConstants as PDFViewerApplicationConstants, AppOptions as PDFViewerApplicationOptions };
 
 //# sourceMappingURL=viewer.mjs.map
+
+
+
+
+
+
+
+document.getElementById("quickHandTool").onclick = () => {
+    document.getElementById("cursorHandTool").click();
+};
+
+document.getElementById("quickScrollVertical").onclick = () => {
+    document.getElementById("scrollVertical").click();
+};
+
+document.getElementById("quickPresentation").onclick = () => {
+    document.getElementById("presentationMode").click();
+};
+
+document.getElementById("quickPrint").onclick = () => {
+    document.getElementById("printButton").click();
+};
+
+document.getElementById("quickDownload").onclick = () => {
+    document.getElementById("downloadButton").click();
+};

@@ -105,6 +105,180 @@ router.get("/", async (req, res) => {
 
 });
 
+
+
+
+
+// =====================================================
+// PDF FOR PDF.JS VIEWER
+// =====================================================
+
+router.get("/:id/pdf", async (req, res) => {
+
+    try {
+
+        const file =
+        await File.findById(
+            req.params.id
+        );
+
+
+        if(!file){
+
+            return res.status(404).json({
+
+                success:false,
+
+                message:
+                "فایل پیدا نشد"
+
+            });
+
+        }
+
+
+        const fileName =
+        `${file._id}.pdf`;
+
+
+        const filePath =
+        path.join(
+            TEMP_DIR,
+            fileName
+        );
+
+
+        // =========================================
+        // اگر قبلاً دانلود شده
+        // =========================================
+
+        if(fs.existsSync(filePath)){
+
+            return res.sendFile(
+                filePath
+            );
+
+        }
+
+
+        // =========================================
+        // گرفتن لینک از روبیکا
+        // =========================================
+
+        const rubikaResponse =
+        await axios.post(
+
+            `https://botapi.rubika.ir/v3/${TOKEN}/getFile`,
+
+            {
+                file_id:
+                file.fileId
+            },
+
+            {
+                timeout:15000
+            }
+
+        );
+
+
+        const downloadUrl =
+        rubikaResponse
+        .data
+        ?.data
+        ?.download_url;
+
+
+        if(!downloadUrl){
+
+            return res.status(500).json({
+
+                success:false,
+
+                message:
+                "لینک دانلود روبیکا دریافت نشد"
+
+            });
+
+        }
+
+
+        // =========================================
+        // دانلود PDF
+        // =========================================
+
+        const pdfResponse =
+        await axios.get(
+
+            downloadUrl,
+
+            {
+                responseType:
+                "arraybuffer",
+
+                timeout:
+                60000
+            }
+
+        );
+
+
+        fs.writeFileSync(
+
+            filePath,
+
+            pdfResponse.data
+
+        );
+
+
+        // =========================================
+        // ذخیره اطلاعات در MongoDB
+        // =========================================
+
+        file.tempPath =
+        `temp-files/${fileName}`;
+
+        file.tempCreatedAt =
+        new Date();
+
+        await file.save();
+
+
+        // =========================================
+        // ارسال PDF به PDF.js
+        // =========================================
+
+        res.sendFile(
+            filePath
+        );
+
+
+    }
+    catch(error){
+
+        console.error(
+
+            "❌ PDF VIEW ERROR:",
+
+            error.response?.data ||
+            error.message
+
+        );
+
+
+        res.status(500).json({
+
+            success:false,
+
+            message:
+            "خطا در دریافت PDF"
+
+        });
+
+    }
+
+});
 // =====================================================
 // OPEN FILE
 // =====================================================

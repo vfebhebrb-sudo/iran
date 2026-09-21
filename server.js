@@ -83,6 +83,9 @@ const pushRoutes =
 
     const rubikaNotificationRoutes =
     require("./routes/rubikaNotification.routes");
+
+    const telegramRoute =
+require("./routes/telegram");
 // ======================================================
 // BOTS
 // ======================================================
@@ -93,13 +96,15 @@ const rubikaBot =
 const startRubikaBot =
     require("./rubika-bot/riseo");
 
+// const rubikaFileChannelBot =
+//     require("./روبیکا/RUBIKA_FILE_CHANNEL");
 
 // Telegram فعلاً غیرفعال است
 let telegramBot = null;
 
 try {
 
-    // telegramBot = require("./telegram/bot");
+    telegramBot = require("./telegram/bot");
 
 } catch (error) {
 
@@ -228,7 +233,10 @@ app.use(
     testRoutes
 );
 
-
+app.use(
+    "/api/telegram",
+    telegramRoute
+);
 // ------------------------------
 // Exams
 // ------------------------------
@@ -493,6 +501,29 @@ async function startServer() {
 
 
         notificationBot.startBot();
+
+
+
+        // ------------------------------------------
+// Rubika File Channel Bot
+// ------------------------------------------
+
+try {
+
+    rubikaFileChannelBot.startBot();
+
+    console.log(
+        "Rubika file channel bot started ✅"
+    );
+
+} catch (error) {
+
+    console.log(
+        "Rubika file channel bot error ❌",
+        error.message
+    );
+
+}
 
 
         // ------------------------------------------

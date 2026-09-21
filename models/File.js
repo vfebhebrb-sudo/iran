@@ -1,7 +1,14 @@
 const mongoose = require("mongoose");
 
 
+
 const fileSchema = new mongoose.Schema({
+
+
+
+    // ===============================
+    // FILE INFO
+    // ===============================
 
 
     name: {
@@ -19,9 +26,11 @@ const fileSchema = new mongoose.Schema({
 
         type: String,
 
-        required: true,
+        default: "سایر",
 
-        trim: true
+        trim: true,
+
+        index: true
 
     },
 
@@ -32,7 +41,9 @@ const fileSchema = new mongoose.Schema({
 
         required: true,
 
-        unique: true
+        unique: true,
+
+        index: true
 
     },
 
@@ -55,6 +66,12 @@ const fileSchema = new mongoose.Schema({
     },
 
 
+
+    // ===============================
+    // SOURCE
+    // ===============================
+
+
     source: {
 
         type: String,
@@ -73,9 +90,11 @@ const fileSchema = new mongoose.Schema({
     },
 
 
+
     // ===============================
-    // TEMP FILE STORAGE
+    // STORAGE
     // ===============================
+
 
     tempPath: {
 
@@ -94,12 +113,90 @@ const fileSchema = new mongoose.Schema({
 
     },
 
-    lesson:{
-    type:String,
-    default:"سایر"
+
+
+    // ===============================
+    // WEBSITE DISPLAY
+    // ===============================
+
+
+    title: {
+
+        type: String,
+
+        default: null,
+
+        trim: true
+
     },
 
+
+    description: {
+
+        type: String,
+
+        default: null,
+
+        trim: true
+
+    },
+
+
+    pages: {
+
+        type: Number,
+
+        default: 0
+
+    },
+
+
+    downloads: {
+
+        type: Number,
+
+        default: 0
+
+    },
+
+
+
+    // ===============================
+    // STATUS
+    // ===============================
+
+
+    status: {
+
+        type: String,
+
+        enum: [
+            "active",
+            "hidden",
+            "deleted"
+        ],
+
+        default: "active"
+
+    },
+
+
+
+    // ===============================
+    // DATE
+    // ===============================
+
+
     createdAt: {
+
+        type: Date,
+
+        default: Date.now
+
+    },
+
+
+    updatedAt: {
 
         type: Date,
 
@@ -108,11 +205,32 @@ const fileSchema = new mongoose.Schema({
     }
 
 
-    
+
 });
 
 
-module.exports = 
+
+
+
+// آپدیت خودکار زمان تغییر
+
+fileSchema.pre(
+    "save",
+    function(next){
+
+        this.updatedAt =
+        Date.now();
+
+        next();
+
+    }
+);
+
+
+
+
+
+module.exports =
 mongoose.model(
     "File",
     fileSchema
