@@ -63,32 +63,23 @@ function getFiles(){
 // SEND
 // ===============================
 
+async function send(chat, text) {
+    try {
 
-async function send(chat,text){
+        console.log("📤 SENDING TO:", chat);
+        console.log("📝 TEXT:", text);
 
-    try{
+        const result = await bot.sendMessage(chat, text);
 
-        await bot.sendMessage(
-            chat,
-            text
-        );
+        console.log("✅ MESSAGE SENT:", result.message_id);
 
+    } catch (e) {
 
-    }catch(e){
-
-        console.log(
-            "SEND ERROR:",
-            e.message
-        );
+        console.log("❌ SEND ERROR:", e);
+        console.log("❌ SEND ERROR MESSAGE:", e.message);
 
     }
-
 }
-
-
-
-
-
 // ===============================
 // START
 // ===============================
