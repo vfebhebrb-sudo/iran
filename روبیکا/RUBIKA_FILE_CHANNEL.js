@@ -1,105 +1,186 @@
 // ======================================================
-// RUBIKA FILE CHANNEL BOT
-// مرحله 1 — دریافت پیام و پاسخ
+// RISEO RUBIKA AI BOT
+// Rubika + Gemini
 // ======================================================
+
 
 require("dotenv").config();
 
 const axios = require("axios");
 
+const askGemini =
+    require("../ai/gemini");
+
+
+
 // ======================================================
-// TOKEN
+// CONFIG
 // ======================================================
+
 
 const TOKEN =
     process.env.RUBIKA_FILE_CHANNEL_BOT_TOKEN;
 
-if (!TOKEN) {
-    console.error(
-        "❌ RUBIKA_FILE_CHANNEL_BOT_TOKEN پیدا نشد!"
+
+
+if(!TOKEN){
+
+    console.log(
+        "❌ RUBIKA TOKEN NOT FOUND"
     );
+
 }
 
-// ======================================================
-// API
-// ======================================================
+
+
+
+const BASE_URL =
+`https://botapi.rubika.ir/v3/${TOKEN}`;
+
+
+
+
 
 const api = axios.create({
-    timeout: 15000,
-    headers: {
-        "Content-Type": "application/json"
+
+    timeout:15000,
+
+    headers:{
+        "Content-Type":"application/json"
     }
+
 });
 
+
+
+
 // ======================================================
-// OFFSET
+// STATE
 // ======================================================
 
+
 let offset_id = null;
-let running = false;
+
+let started = false;
+
+
+
+
+
+// ======================================================
+// RUBIKA REQUEST
+// ======================================================
+
+
+async function rubika(method,data={}){
+
+
+    const response =
+    await api.post(
+
+        `${BASE_URL}/${method}`,
+
+        data
+
+    );
+
+
+    return response.data;
+
+}
+
+
+
+
+
 
 // ======================================================
 // SEND MESSAGE
 // ======================================================
 
-async function sendMessage(chatId, text) {
 
-    if (!TOKEN) {
-        throw new Error(
-            "توکن ربات فایل کانال وجود ندارد."
+async function sendMessage(chatId,text){
+
+
+    if(!chatId){
+
+        console.log(
+            "❌ CHAT ID EMPTY"
         );
+
+        return;
+
     }
 
-    if (!chatId) {
-        throw new Error(
-            "Chat ID وجود ندارد."
+
+
+    try{
+
+
+        const result =
+        await rubika(
+            "sendMessage",
+            {
+
+                chat_id:String(chatId),
+
+                text:String(text)
+
+            }
         );
+
+
+
+        console.log(
+            "✅ SENT:",
+            chatId
+        );
+
+
+
+        return result;
+
+
+    }
+    catch(error){
+
+
+        console.log(
+            "❌ SEND ERROR:",
+            error.response?.data ||
+            error.message
+        );
+
+
     }
 
-    try {
 
-        const payload = {
-            chat_id: String(chatId).trim(),
-            text: String(text)
-        };
+}
 
-        console.log("");
-        console.log(
-            "╔══════════════════════════════════════╗"
-        );
-        console.log(
-            "║       📤 FILE BOT SEND MESSAGE       ║"
-        );
-        console.log(
-            "╚══════════════════════════════════════╝"
-        );
 
-        console.log(
-            "👤 CHAT ID:",
-            payload.chat_id
-        );
 
-        console.log(
-            "📝 TEXT:",
-            payload.text
-        );
 
-        const response = await api.post(
 
-            `https://botapi.rubika.ir/v3/${TOKEN}/sendMessage`,
 
-            payload
+// ======================================================
+// BOT INFO
+// ======================================================
 
-        );
+
+async function getMe(){
+
+
+    try{
+
 
         const data =
-            response.data;
-
-        console.log(
-            "📡 RUBIKA RESPONSE:"
+        await rubika(
+            "getMe"
         );
 
+
         console.log(
+            "🤖 BOT:",
             JSON.stringify(
                 data,
                 null,
@@ -107,440 +188,450 @@ async function sendMessage(chatId, text) {
             )
         );
 
-        if (
-            !data ||
-            data.status !== "OK"
-        ) {
 
-            const errorMessage =
-                data?.message ||
-                data?.error ||
-                `Rubika API status: ${
-                    data?.status || "UNKNOWN"
-                }`;
-
-            console.error(
-                "❌ ارسال پیام رد شد:",
-                errorMessage
-            );
-
-            throw new Error(
-                errorMessage
-            );
-        }
-
-        console.log(
-            "✅ پیام با موفقیت ارسال شد"
-        );
-
-        console.log(
-            "🆔 MESSAGE ID:",
-            data.data?.message_id || "N/A"
-        );
-
-        console.log("");
 
         return data;
 
+
     }
-    catch (error) {
+    catch(error){
 
-        console.error("");
-        console.error(
-            "╔══════════════════════════════════════╗"
-        );
-        console.error(
-            "║       ❌ FILE BOT SEND FAILED        ║"
-        );
-        console.error(
-            "╚══════════════════════════════════════╝"
-        );
 
-        console.error(
-            "HTTP STATUS:",
-            error.response?.status || "N/A"
-        );
-
-        console.error(
-            "RUBIKA RESPONSE:",
-            JSON.stringify(
-                error.response?.data,
-                null,
-                2
-            )
-        );
-
-        console.error(
-            "ERROR:",
+        console.log(
+            "❌ GET ME ERROR:",
             error.message
         );
 
-        console.error("");
-
-        throw error;
-    }
-}
-
-// ======================================================
-// GET BOT INFO
-// ======================================================
-
-async function getBotInfo() {
-
-    try {
-
-        const response = await api.post(
-
-            `https://botapi.rubika.ir/v3/${TOKEN}/getMe`
-
-        );
-
-        console.log("");
-        console.log(
-            "╔══════════════════════════════════════╗"
-        );
-        console.log(
-            "║       🤖 FILE CHANNEL BOT INFO       ║"
-        );
-        console.log(
-            "╚══════════════════════════════════════╝"
-        );
-
-        console.log(
-            JSON.stringify(
-                response.data,
-                null,
-                2
-            )
-        );
-
-        console.log("");
-
-        return response.data;
-
-    }
-    catch (error) {
-
-        console.error(
-            "❌ GET BOT INFO ERROR:",
-            error.response?.data ||
-            error.message
-        );
 
         return null;
+
     }
+
+
 }
 
+
+
+
+
+
+
+
 // ======================================================
-// PROCESS MESSAGE
+// MESSAGE HANDLER
 // ======================================================
 
-async function processUpdate(update) {
 
-    if (!update) {
-        return;
-    }
+async function handleMessage(update){
 
-    // فقط پیام‌های جدید
-    if (
-        update.type !== "NewMessage"
-    ) {
-        return;
-    }
+
 
     const message =
-        update.new_message;
+        update?.new_message;
 
-    if (!message) {
+
+
+    if(!message){
+
         return;
+
     }
 
+
+
+
     const text =
-        message.text || "";
+        message.text?.trim();
+
+
+
+    if(!text){
+
+        return;
+
+    }
+
+
+
+
 
     const chatId =
+
         message.chat_id ||
-        update.chat_id ||
-        null;
+
+        message.object_guid ||
+
+        update.chat_id;
+
+
+
+
 
     console.log("");
+
     console.log(
-        "╔══════════════════════════════════════╗"
-    );
-    console.log(
-        "║       📥 FILE BOT NEW MESSAGE        ║"
-    );
-    console.log(
-        "╚══════════════════════════════════════╝"
+        "📩 NEW MESSAGE"
     );
 
     console.log(
-        "👤 CHAT ID:",
+        "CHAT:",
         chatId
     );
 
     console.log(
-        "📝 TEXT:",
-        text || "(بدون متن)"
+        "TEXT:",
+        text
     );
 
-    console.log(
-        "👤 SENDER:",
-        message.sender_id || "N/A"
-    );
 
-    console.log("");
 
-    if (!chatId) {
+
+
+
+    if(!chatId){
 
         console.log(
-            "⚠️ chatId پیدا نشد."
+            "⚠️ CHAT NOT FOUND"
         );
 
         return;
+
     }
 
-    // ==================================================
-    // /start
-    // ==================================================
 
-    if (
-        text.trim() === "/start"
-    ) {
+
+
+
+
+
+    // -------------------------
+    // START
+    // -------------------------
+
+
+    if(text === "/start"){
+
 
         await sendMessage(
+
             chatId,
 
-`🤖 ربات فایل سایت فعال شد!
+`
+🤖 ربات هوش مصنوعی فعال شد.
 
-سلام 👋
+هر سوالی داری بپرس.
+`
 
-ربات با موفقیت پیام شما را دریافت کرد.
-
-✅ اتصال به ربات برقرار است.
-
-🆔 Chat ID:
-
-${chatId}`
         );
 
+
         return;
+
     }
 
-    // ==================================================
-    // سلام
-    // ==================================================
 
-    if (
-        text.trim() === "سلام"
-    ) {
+
+
+
+
+
+
+    // -------------------------
+    // GEMINI
+    // -------------------------
+
+
+    try{
+
 
         await sendMessage(
+
             chatId,
 
-`سلام 👋
+            "⏳ در حال فکر کردن..."
 
-🤖 ربات فایل سایت فعاله!
-
-پیامت رو دریافت کردم ✅
-
-🆔 Chat ID:
-
-${chatId}`
         );
 
-        return;
+
+
+        const answer =
+
+            await askGemini(text);
+
+
+
+
+
+        await sendMessage(
+
+            chatId,
+
+            answer
+
+        );
+
+
+
     }
 
-    // ==================================================
-    // هر پیام دیگری
-    // ==================================================
+    catch(error){
 
-    await sendMessage(
-        chatId,
 
-`📩 پیامت دریافت شد!
+        console.log(
+            "❌ AI ERROR:",
+            error.message
+        );
 
-📝 متن پیام:
 
-${text || "بدون متن"}
 
-✅ ربات به درستی در حال کار است.`
-    );
+        await sendMessage(
+
+            chatId,
+
+            "❌ خطا در دریافت پاسخ هوش مصنوعی"
+
+        );
+
+
+    }
+
+
+
 }
+
+
+
+
+
+
+
 
 // ======================================================
 // GET UPDATES
 // ======================================================
 
-async function getUpdates() {
 
-    if (running) {
-        return;
-    }
+async function getUpdates(){
 
-    if (!TOKEN) {
-        return;
-    }
 
-    running = true;
+    try{
 
-    try {
 
-        const response = await api.post(
+        const result =
 
-            `https://botapi.rubika.ir/v3/${TOKEN}/getUpdates`,
+        await rubika(
+
+            "getUpdates",
 
             {
+
                 offset_id
+
             }
 
         );
 
-        // ساختار واقعی Rubika
-        const data =
-            response.data?.data;
 
-        if (!data) {
+
+
+
+        const data =
+
+            result?.data;
+
+
+
+        if(!data){
+
             return;
+
         }
+
+
+
+
+
 
         const updates =
+
             data.updates || [];
 
-        if (updates.length > 0) {
 
-            console.log("");
-            console.log(
-                `📦 ${updates.length} آپدیت دریافت شد.`
-            );
-        }
 
-        // پردازش تک‌تک آپدیت‌ها
-        for (
-            const update of updates
-        ) {
 
-            try {
 
-                await processUpdate(
+        for(const update of updates){
+
+
+            try{
+
+
+                console.log(
+                    "UPDATE TYPE:",
+                    update.type
+                );
+
+
+
+                await handleMessage(
                     update
                 );
 
-            }
-            catch (error) {
 
-                console.error(
-                    "❌ UPDATE PROCESS ERROR:",
+            }
+            catch(error){
+
+
+                console.log(
+                    "UPDATE ERROR:",
                     error.message
                 );
+
+
             }
+
+
         }
 
-        // ==================================================
-        // ذخیره OFFSET
-        // ==================================================
 
-        if (
-            data.next_offset_id
-        ) {
+
+
+
+        if(data.next_offset_id){
+
 
             offset_id =
-                data.next_offset_id;
+
+            data.next_offset_id;
+
 
         }
 
-    }
-    catch (error) {
 
-        console.error(
-            "❌ FILE BOT UPDATE ERROR:",
+
+
+    }
+
+    catch(error){
+
+
+        console.log(
+
+            "❌ GET UPDATES ERROR:",
+
             error.response?.data ||
             error.message
+
         );
 
-    }
-    finally {
-
-        running = false;
 
     }
+
+
 }
 
+
+
+
+
+
+
 // ======================================================
-// START BOT
+// START
 // ======================================================
 
-async function startBot() {
 
-    console.log("");
-    console.log(
-        "========================================"
-    );
-    console.log(
-        "🤖 RUBIKA FILE CHANNEL BOT"
-    );
-    console.log(
-        "========================================"
-    );
+async function startBot(){
 
-    if (!TOKEN) {
 
-        console.log(
-            "❌ File channel bot NOT started"
-        );
+
+    if(started){
 
         return;
+
     }
 
+
+    started=true;
+
+
+
     console.log(
-        "🔑 Token loaded"
+        "================================"
     );
 
-    // گرفتن اطلاعات ربات
-    const botInfo =
-        await getBotInfo();
 
-    if (!botInfo) {
+    console.log(
+        "🤖 RUBIKA GEMINI BOT STARTED"
+    );
+
+
+    console.log(
+        "================================"
+    );
+
+
+
+    const bot =
+
+        await getMe();
+
+
+
+    if(!bot){
+
 
         console.log(
-            "❌ اتصال ربات فایل کانال ناموفق بود"
+            "❌ BOT CONNECTION FAILED"
         );
 
+
         return;
+
+
     }
 
-    console.log(
-        "✅ File channel bot connected"
-    );
 
-    console.log(
-        "📡 Waiting for messages..."
-    );
 
-    console.log(
-        "========================================"
-    );
 
-    // اولین بررسی
+
     await getUpdates();
 
-    // بررسی پیام‌های جدید
+
+
+
     setInterval(
+
         getUpdates,
-        5000
+
+        3000
+
     );
+
+
+
 }
+
+
+
+
+
 
 // ======================================================
 // EXPORT
 // ======================================================
 
+
 module.exports = {
 
+
     startBot,
+
     sendMessage,
-    getBotInfo,
-    getUpdates
+
+    getUpdates,
+
+    getMe
+
 
 };

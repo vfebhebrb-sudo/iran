@@ -86,6 +86,10 @@ const pushRoutes =
 
     const telegramRoute =
 require("./routes/telegram");
+
+
+const adminExamAiRoute =
+    require("./routes/adminExamAi");
 // ======================================================
 // BOTS
 // ======================================================
@@ -96,8 +100,8 @@ const rubikaBot =
 const startRubikaBot =
     require("./rubika-bot/riseo");
 
-// const rubikaFileChannelBot =
-//     require("./روبیکا/RUBIKA_FILE_CHANNEL");
+const rubikaFileChannelBot =
+    require("./روبیکا/RUBIKA_FILE_CHANNEL");
 
 // Telegram فعلاً غیرفعال است
 let telegramBot = null;
@@ -223,7 +227,10 @@ app.use(
     chatRoutes
 );
 
-
+app.use(
+    "/api/admin/ai",
+    adminExamAiRoute
+);
 // ------------------------------
 // Tests
 // ------------------------------

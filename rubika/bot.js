@@ -16,14 +16,13 @@ const TOKEN = process.env.RUBIKA_TOKEN;
 
 const api = axios.create({
 
-    timeout:15000,
+    timeout: 15000,
 
-    headers:{
-        "Content-Type":"application/json"
+    headers: {
+        "Content-Type": "application/json"
     }
 
 });
-
 
 
 // ===============================
@@ -35,30 +34,26 @@ const offsetFile = path.join(
     "offset.json"
 );
 
-
 let offset_id = null;
 
 
+if (fs.existsSync(offsetFile)) {
 
-if(fs.existsSync(offsetFile)){
-
-    try{
+    try {
 
         const data =
-        JSON.parse(
-            fs.readFileSync(
-                offsetFile,
-                "utf8"
-            )
-        );
-
+            JSON.parse(
+                fs.readFileSync(
+                    offsetFile,
+                    "utf8"
+                )
+            );
 
         offset_id =
-        data.offset_id || null;
-
+            data.offset_id || null;
 
     }
-    catch{
+    catch {
 
         offset_id = null;
 
@@ -67,8 +62,7 @@ if(fs.existsSync(offsetFile)){
 }
 
 
-
-function saveOffset(){
+function saveOffset() {
 
     fs.writeFileSync(
 
@@ -83,32 +77,55 @@ function saveOffset(){
 }
 
 
+// ===============================
+// OTP STORAGE
+// ===============================
+//
+// کد OTP هر کاربر موقتاً اینجا نگهداری می‌شود
+// تا وقتی روی دکمه «کپی کد» بزند.
+// ===============================
+
+const otpCodes = {};
+
 
 // ===============================
 // SEND MESSAGE
 // ===============================
 
+async function sendMessage(
+    chat_id,
+    text,
+    inline_keypad = null
+) {
 
-async function sendMessage(chat_id,text){
+    try {
+
+        const body = {
+
+            chat_id,
+
+            text
+
+        };
 
 
-    try{
+        // اگر دکمه شیشه‌ای وجود داشت
+        if (inline_keypad) {
+
+            body.inline_keypad =
+                inline_keypad;
+
+        }
 
 
         const res =
-        await api.post(
+            await api.post(
 
-            `https://botapi.rubika.ir/v3/${TOKEN}/sendMessage`,
+                `https://botapi.rubika.ir/v3/${TOKEN}/sendMessage`,
 
-            {
+                body
 
-                chat_id,
-
-                text
-
-            }
-
-        );
+            );
 
 
         console.log(
@@ -119,10 +136,8 @@ async function sendMessage(chat_id,text){
 
         return res.data;
 
-
     }
-    catch(error){
-
+    catch (error) {
 
         console.log(
 
@@ -133,36 +148,112 @@ async function sendMessage(chat_id,text){
 
         );
 
-
     }
 
 }
 
 
+// ===============================
+// INLINE KEYBOARD
+// ===============================
+
+
+// دکمه کپی شناسه روبیکا
+function chatIdKeyboard() {
+
+    return {
+
+        rows: [
+
+            {
+
+                buttons: [
+
+                    {
+
+                        id: "copy_chat_id",
+
+                        type: "Simple",
+
+                        button_text:
+                            "📋 کپی شناسه روبیکا"
+
+                    }
+
+                ]
+
+            }
+
+        ]
+
+    };
+
+}
+
+
+// دکمه کپی کد OTP
+function otpKeyboard() {
+
+    return {
+
+        rows: [
+
+            {
+
+                buttons: [
+
+                    {
+
+                        id: "copy_otp",
+
+                        type: "Simple",
+
+                        button_text:
+                            "📋 کپی کد تأیید"
+
+                    }
+
+                ]
+
+            }
+
+        ]
+
+    };
+
+}
 
 
 // ===============================
 // SEND OTP
 // ===============================
 
+async function sendOTP(
+    chat_id,
+    code
+) {
 
-async function sendOTP(chat_id,code){
+    // ذخیره کد برای این کاربر
+    otpCodes[chat_id] = {
+
+        code: String(code),
+
+        createdAt: Date.now()
+
+    };
 
 
     const text =
 
-`🔐 کد تایید حساب
+`🔐 کد تأیید حساب
 
-
-━━━━━━━━━━━━━━
+━━━━━━━━━━━━━━━━
 
         ${code}
 
-━━━━━━━━━━━━━━
-
+━━━━━━━━━━━━━━━━
 
 ⏳ اعتبار کد: ۲ دقیقه
-
 
 ⚠️ این کد را فقط در سایت وارد کنید.
 
@@ -172,98 +263,245 @@ async function sendOTP(chat_id,code){
 🤖 سامانه برنامه‌ریزی کنکور`;
 
 
-
     return sendMessage(
+
         chat_id,
-        text
+
+        text,
+
+        otpKeyboard()
+
     );
 
-
 }
-
-
-
 
 
 // ===============================
 // UPDATE LOOP
 // ===============================
 
-
-let running=false;
-
-
-const cooldown={};
+let running = false;
 
 
+const cooldown = {};
 
-async function getMessages(){
 
+// ===============================
+// GET MESSAGES
+// ===============================
 
-    if(running)
+async function getMessages() {
+
+    if (running)
         return;
 
 
+    running = true;
 
-    running=true;
 
-
-    try{
-
+    try {
 
         const res =
-        await api.post(
+            await api.post(
 
-            `https://botapi.rubika.ir/v3/${TOKEN}/getUpdates`,
+                `https://botapi.rubika.ir/v3/${TOKEN}/getUpdates`,
 
-            {
-                offset_id
-            }
+                {
+                    offset_id
+                }
 
-        );
-
+            );
 
 
         const data =
-        res.data?.data;
+            res.data?.data;
 
 
-
-        if(!data)
+        if (!data)
             return;
 
 
-
         const updates =
-        data.updates || [];
+            data.updates || [];
 
 
+        for (const update of updates) {
 
-        for(const update of updates){
 
-
-            if(
+            // فقط پیام‌های جدید
+            if (
                 update.type !== "NewMessage"
             )
-            continue;
-
+                continue;
 
 
             const message =
-            update.new_message;
+                update.new_message;
 
+
+            if (!message)
+                continue;
 
 
             const text =
-            message.text || "";
-
+                message.text || "";
 
 
             const chat =
-            message.chat_id ||
-            update.chat_id;
+                message.chat_id ||
+                update.chat_id;
 
 
+            // ==========================================
+            // BUTTON CLICK
+            // ==========================================
+            //
+            // کلیک دکمه‌های شیشه‌ای در aux_data قرار دارد.
+            //
+            // ==========================================
+
+            const buttonId =
+                message.aux_data?.button_id;
+
+
+            if (buttonId) {
+
+
+                console.log(
+                    "BUTTON CLICK:",
+                    buttonId,
+                    "CHAT:",
+                    chat
+                );
+
+
+                // ======================================
+                // COPY CHAT ID
+                // ======================================
+
+                if (
+                    buttonId === "copy_chat_id"
+                ) {
+
+                    await sendMessage(
+
+                        chat,
+
+`📋 شناسه روبیکای شما:
+
+${chat}
+
+━━━━━━━━━━━━━━━━
+
+👆 شناسه بالا را کپی کنید
+و در سایت وارد کنید.`
+
+                    );
+
+
+                    continue;
+
+                }
+
+
+                // ======================================
+                // COPY OTP
+                // ======================================
+
+                if (
+                    buttonId === "copy_otp"
+                ) {
+
+
+                    const otp =
+                        otpCodes[chat];
+
+
+                    // اگر کد وجود نداشت
+                    if (!otp) {
+
+                        await sendMessage(
+
+                            chat,
+
+`⚠️ کد تأیید پیدا نشد.
+
+لطفاً دوباره درخواست ارسال
+کد تأیید کنید.`
+
+                        );
+
+
+                        continue;
+
+                    }
+
+
+                    // بررسی اعتبار ۲ دقیقه‌ای
+                    const expired =
+                        Date.now() -
+                        otp.createdAt >
+                        2 * 60 * 1000;
+
+
+                    if (expired) {
+
+                        delete otpCodes[chat];
+
+
+                        await sendMessage(
+
+                            chat,
+
+`⏳ این کد منقضی شده است.
+
+لطفاً یک کد تأیید جدید
+درخواست کنید.`
+
+                        );
+
+
+                        continue;
+
+                    }
+
+
+                    await sendMessage(
+
+                        chat,
+
+`📋 کد تأیید شما:
+
+${otp.code}
+
+━━━━━━━━━━━━━━━━
+
+👆 کد بالا را کپی کنید
+و در سایت وارد کنید.`
+
+                    );
+
+
+                    continue;
+
+                }
+
+
+                // اگر دکمه ناشناخته بود
+                console.log(
+                    "UNKNOWN BUTTON:",
+                    buttonId
+                );
+
+
+                continue;
+
+            }
+
+
+            // ==========================================
+            // LOG MESSAGE
+            // ==========================================
 
             console.log(
                 "MESSAGE:",
@@ -271,49 +509,37 @@ async function getMessages(){
             );
 
 
-
-
-
-            // =====================
+            // ==========================================
             // START
-            // =====================
+            // ==========================================
+
+            if (text === "/start") {
 
 
-            if(text === "/start"){
-
-
-
-                if(
+                if (
                     cooldown[chat] &&
-                    Date.now()-cooldown[chat] < 5000
-                ){
+                    Date.now() -
+                    cooldown[chat] < 5000
+                ) {
 
                     continue;
 
                 }
 
 
+                cooldown[chat] =
+                    Date.now();
 
-                cooldown[chat]=Date.now();
 
-
-
-                await sendMessage(
-
-                    chat,
-
+                const startText =
 
 `👋 سلام، خوش آمدید
 
-
 🎓 سامانه برنامه‌ریزی کنکور
 
-
-━━━━━━━━━━━━━━
-
+━━━━━━━━━━━━━━━━
 
 ✨ امکانات سامانه:
-
 
 📚 برنامه‌ریزی مطالعه
 
@@ -323,86 +549,94 @@ async function getMessages(){
 
 📊 گزارش پیشرفت
 
+━━━━━━━━━━━━━━━━
 
-━━━━━━━━━━━━━━
-
-
-🤖 شناسه روبیکای شما:
-
-
-📋
+🆔 شناسه روبیکای شما:
 
 ${chat}
 
+━━━━━━━━━━━━━━━━
 
-👆 این عدد را نگه دارید و
-در صفحه ثبت‌نام سایت وارد کنید.
+🔹 برای ثبت‌نام در سایت،
+شناسه بالا را وارد کنید.
 
+📋 همچنین می‌توانید از دکمه
+زیر برای دریافت شناسه استفاده کنید.
 
-━━━━━━━━━━━━━━
+━━━━━━━━━━━━━━━━
 
-
-🚀 موفقیت با برنامه‌ریزی شروع می‌شود.`
-
-
-                );
-
-
-            }
-
-
-
-
-            // =====================
-            // HELLO
-            // =====================
-
-
-            if(text === "سلام"){
+🚀 موفقیت با برنامه‌ریزی شروع می‌شود.`;
 
 
                 await sendMessage(
 
                     chat,
 
-`سلام 👋
+                    startText,
 
-ربات فعال است ✅
-
-شناسه شما:
-
-${chat}`
+                    chatIdKeyboard()
 
                 );
 
 
+                continue;
+
             }
 
 
+            // ==========================================
+            // HELLO
+            // ==========================================
+
+            if (text === "سلام") {
+
+
+                await sendMessage(
+
+                    chat,
+
+`👋 سلام!
+
+🤖 ربات با موفقیت فعال است.
+
+━━━━━━━━━━━━━━━━
+
+🆔 شناسه شما:
+
+${chat}
+
+━━━━━━━━━━━━━━━━
+
+برای دریافت شناسه،
+روی دکمه زیر بزنید.`,
+
+                    chatIdKeyboard()
+
+                );
+
+
+                continue;
+
+            }
 
         }
 
 
+        // ==========================================
+        // UPDATE OFFSET
+        // ==========================================
 
-
-        if(data.next_offset_id){
-
+        if (data.next_offset_id) {
 
             offset_id =
-            data.next_offset_id;
-
+                data.next_offset_id;
 
             saveOffset();
 
-
         }
 
-
-
-
     }
-    catch(error){
-
+    catch (error) {
 
         console.log(
 
@@ -415,29 +649,30 @@ ${chat}`
 
 
         await new Promise(
-            r=>setTimeout(r,5000)
+
+            r =>
+                setTimeout(
+                    r,
+                    5000
+                )
+
         );
 
+    }
+    finally {
+
+        running = false;
 
     }
-    finally{
-
-        running=false;
-
-    }
-
 
 }
-
 
 
 // ===============================
 // START BOT
 // ===============================
 
-
-function startBot(){
-
+function startBot() {
 
     console.log(
         "Rubika bot started"
@@ -445,7 +680,6 @@ function startBot(){
 
 
     getMessages();
-
 
 
     setInterval(
@@ -456,13 +690,14 @@ function startBot(){
 
     );
 
-
 }
 
 
+// ===============================
+// EXPORTS
+// ===============================
 
-
-module.exports={
+module.exports = {
 
     startBot,
 
