@@ -229,12 +229,14 @@ function extractName(text){
 // BUILD MEMORY CONTEXT
 // ======================================================
 
-
-async function buildContext(chatId){
+async function buildContext(chatId,userId){
 
 
     const memories =
-    await getMemory(chatId);
+    await getMemory(
+        chatId,
+        userId
+    );
 
 
 
@@ -246,7 +248,6 @@ async function buildContext(chatId){
 
 
         memories
-        .reverse()
         .forEach(item=>{
 
 
@@ -257,7 +258,7 @@ ${item.message}
 
 
 روبو:
-${item.answer}
+${item.answer || ""}
 
 
 `;
@@ -265,13 +266,17 @@ ${item.answer}
         });
 
 
-
     }
 
 
 
+
     const name =
-    await getUserName(chatId);
+    await getUserName(
+        chatId,
+        userId
+    );
+
 
 
 
@@ -280,8 +285,10 @@ ${item.answer}
 
 تو روبو هستی.
 
+
 نام کاربر:
 ${name || "نامشخص"}
+
 
 
 تاریخچه گفتگو:
@@ -293,10 +300,6 @@ ${context}
 `;
 
 }
-
-
-
-
 
 
 // ======================================================
@@ -386,6 +389,18 @@ async(msg)=>{
 
         const text =
         msg.text.trim();
+
+
+        const chatId =
+String(msg.chat.id);
+
+
+const userId =
+String(msg.from.id);
+
+
+const username =
+msg.from.username || null;
 
 
 
@@ -534,6 +549,42 @@ async(msg)=>{
         const cleanText =
         cleanMessage(text);
 
+        // ==========================================
+// STATIC ROBO COMMANDS
+// ==========================================
+
+
+const lowerText =
+cleanText.toLowerCase();
+
+
+
+// لینک سایت
+
+if(
+    lowerText.includes("لینک سایت") ||
+    lowerText.includes("آدرس سایت") ||
+    lowerText.includes("سایت رو بده")
+){
+
+
+    return send(
+
+        msg.chat.id,
+
+`🌐 لینک سایت:
+
+https://vfebhebrb-sudo.github.io/Riseo/
+
+
+هر وقت خواستی بگو:
+«روبو لینک سایت رو بده»`
+
+    );
+
+
+}
+
 
 
 
@@ -604,11 +655,11 @@ async(msg)=>{
         // ==========================================
 
 
-        const context =
-        await buildContext(
-            msg.chat.id
-        );
-
+            const context =
+            await buildContext(
+                chatId,
+                userId
+            );
 
 
 
@@ -661,45 +712,26 @@ ${cleanText}
         // ذخیره حافظه
         // ==========================================
 
+await saveMemory({
 
-        await saveMemory({
+    chatId,
 
+    userId,
 
+    username,
 
-            chatId:
+    name:
 
-            String(
-                msg.chat.id
-            ),
+    userName ||
+    null,
 
+    message:
 
+    cleanText,
 
-            username:
+    answer
 
-            msg.from.username ||
-            null,
-
-
-
-            name:
-
-            userName ||
-            null,
-
-
-
-            message:
-
-            cleanText,
-
-
-
-            answer
-
-
-
-        });
-
+});
 
 
 

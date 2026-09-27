@@ -7,8 +7,11 @@ const connectRoboDatabase = require("../database/roboDatabase");
 // SCHEMA
 // ======================================================
 
+
 const RoboMemorySchema = new mongoose.Schema({
 
+
+    // آیدی گروه یا چت خصوصی
     chatId: {
 
         type:String,
@@ -20,6 +23,21 @@ const RoboMemorySchema = new mongoose.Schema({
     },
 
 
+
+    // آیدی واقعی کاربر
+    userId: {
+
+        type:String,
+
+        required:true,
+
+        index:true
+
+    },
+
+
+
+    // یوزرنیم کاربر
     username: {
 
         type:String,
@@ -29,6 +47,8 @@ const RoboMemorySchema = new mongoose.Schema({
     },
 
 
+
+    // اسم کاربر
     name: {
 
         type:String,
@@ -38,6 +58,8 @@ const RoboMemorySchema = new mongoose.Schema({
     },
 
 
+
+    // نقش
     role: {
 
         type:String,
@@ -47,6 +69,8 @@ const RoboMemorySchema = new mongoose.Schema({
     },
 
 
+
+    // پیام کاربر
     message: {
 
         type:String,
@@ -56,6 +80,8 @@ const RoboMemorySchema = new mongoose.Schema({
     },
 
 
+
+    // جواب روبو
     answer: {
 
         type:String,
@@ -63,6 +89,7 @@ const RoboMemorySchema = new mongoose.Schema({
         default:null
 
     },
+
 
 
     createdAt: {
@@ -81,6 +108,21 @@ const RoboMemorySchema = new mongoose.Schema({
 
 
 
+// جستجوی سریع حافظه کاربران گروه
+RoboMemorySchema.index({
+
+    chatId:1,
+
+    userId:1,
+
+    createdAt:-1
+
+});
+
+
+
+
+
 
 let RoboMemoryModel = null;
 
@@ -92,6 +134,7 @@ let RoboMemoryModel = null;
 // GET MODEL
 // ======================================================
 
+
 async function getRoboMemoryModel(){
 
 
@@ -100,6 +143,7 @@ async function getRoboMemoryModel(){
         return RoboMemoryModel;
 
     }
+
 
 
     const connection =
@@ -111,6 +155,12 @@ async function getRoboMemoryModel(){
     connection.model(
         "RoboMemory",
         RoboMemorySchema
+    );
+
+
+
+    console.log(
+        "🤖 ROBO MEMORY MODEL READY"
     );
 
 
@@ -130,30 +180,95 @@ async function getRoboMemoryModel(){
 // SAVE MEMORY
 // ======================================================
 
+
 async function saveMemory(data){
 
 
-    const Model =
-    await getRoboMemoryModel();
+    try{
+
+
+        if(
+            !data.chatId ||
+            !data.userId ||
+            !data.message
+        ){
+
+            console.log(
+                "❌ INVALID MEMORY DATA"
+            );
+
+            return;
+
+        }
 
 
 
-    await Model.create({
+        const Model =
+        await getRoboMemoryModel();
 
-        chatId:String(data.chatId),
 
-        username:data.username || null,
 
-        name:data.name || null,
 
-        role:data.role || "user",
+        await Model.create({
 
-        message:data.message,
 
-        answer:data.answer || null
 
-    });
+            chatId:
+            String(data.chatId),
 
+
+
+            userId:
+            String(data.userId),
+
+
+
+            username:
+            data.username || null,
+
+
+
+            name:
+            data.name || null,
+
+
+
+            role:
+            data.role || "user",
+
+
+
+            message:
+            data.message,
+
+
+
+            answer:
+            data.answer || null
+
+
+
+        });
+
+
+
+        console.log(
+            "🧠 ROBO MEMORY SAVED"
+        );
+
+
+
+    }
+    catch(error){
+
+
+        console.log(
+            "❌ SAVE MEMORY ERROR:",
+            error.message
+        );
+
+
+    }
 
 
 }
@@ -165,35 +280,70 @@ async function saveMemory(data){
 
 
 
+
 // ======================================================
-// GET MEMORY
+// GET MEMORY USER
 // ======================================================
 
-async function getMemory(chatId){
+
+async function getMemory(chatId,userId){
 
 
-    const Model =
-    await getRoboMemoryModel();
+    try{
+
+
+        const Model =
+        await getRoboMemoryModel();
 
 
 
-    return await Model
-    .find({
+        const memories =
+        await Model.find({
 
-        chatId:String(chatId)
 
-    })
-    .sort({
+            chatId:
+            String(chatId),
 
-        createdAt:-1
 
-    })
-    .limit(20)
-    .lean();
 
+            userId:
+            String(userId)
+
+
+
+        })
+        .sort({
+
+            createdAt:-1
+
+        })
+        .limit(20)
+        .lean();
+
+
+
+        return memories.reverse();
+
+
+
+    }
+    catch(error){
+
+
+        console.log(
+            "❌ GET MEMORY ERROR:",
+            error.message
+        );
+
+
+        return [];
+
+
+    }
 
 
 }
+
 
 
 
@@ -206,7 +356,8 @@ async function getMemory(chatId){
 // GET USER NAME
 // ======================================================
 
-async function getUserName(chatId){
+
+async function getUserName(chatId,userId){
 
 
     try{
@@ -220,11 +371,24 @@ async function getUserName(chatId){
         const user =
         await Model.findOne({
 
-            chatId:String(chatId),
+
+            chatId:
+            String(chatId),
+
+
+
+            userId:
+            String(userId),
+
+
 
             name:{
+
                 $ne:null
+
             }
+
+
 
         })
         .sort({
@@ -257,6 +421,7 @@ async function getUserName(chatId){
 
 
 }
+
 
 
 

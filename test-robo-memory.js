@@ -1,55 +1,109 @@
 require("dotenv").config();
 
-
 const {
-    getRoboMemoryModel
-} = require("./services/roboMemoryService");
+    saveMemory,
+    getMemory,
+    getUserName
+} = require("./models/RoboMemory");
 
 
 
 async function test(){
 
 
-    try{
+    // کاربر اول
+    await saveMemory({
 
+        chatId:"GROUP_100",
 
-        const Model =
-        await getRoboMemoryModel();
+        userId:"111",
 
+        username:"amir",
 
+        name:"امیرحسین",
 
-        console.log(
-            "🤖 ROBO MEMORY MODEL READY ✅"
-        );
+        message:"سلام روبو اسم من امیرحسین است",
 
+        answer:"سلام امیرحسین 👋"
 
-        console.log(
-            "MODEL NAME:",
-            Model.modelName
-        );
-
-
-        process.exit();
+    });
 
 
 
-    }
-    catch(error){
+    // کاربر دوم
+    await saveMemory({
+
+        chatId:"GROUP_100",
+
+        userId:"222",
+
+        username:"ali",
+
+        name:"علی",
+
+        message:"سلام روبو اسم من علی است",
+
+        answer:"سلام علی 👋"
+
+    });
 
 
-        console.log(
-            "❌ MEMORY TEST ERROR:",
-            error.message
-        );
 
 
-        process.exit(1);
+    console.log(
+        "\n👤 USER 111:"
+    );
 
-    }
 
+    console.log(
+        await getMemory(
+            "GROUP_100",
+            "111"
+        )
+    );
+
+
+
+
+    console.log(
+        "\n👤 USER 222:"
+    );
+
+
+    console.log(
+        await getMemory(
+            "GROUP_100",
+            "222"
+        )
+    );
+
+
+
+    console.log(
+        "\nNAME TEST:"
+    );
+
+
+    console.log(
+        await getUserName(
+            "GROUP_100",
+            "111"
+        )
+    );
+
+
+    console.log(
+        await getUserName(
+            "GROUP_100",
+            "222"
+        )
+    );
+
+
+
+    process.exit();
 
 }
-
 
 
 test();

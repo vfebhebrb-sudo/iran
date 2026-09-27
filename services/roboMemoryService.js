@@ -2,73 +2,61 @@ const mongoose = require("mongoose");
 const connectRoboDatabase = require("../database/roboDatabase");
 
 
+
 // ======================================================
 // ROBO MEMORY SCHEMA
 // ======================================================
 
 const RoboMemorySchema = new mongoose.Schema({
 
-    // شناسه چت تلگرام
-    chatId: {
-
-        type: String,
-
-        required: true,
-
-        index: true
-
-    },
-
-
-    // یوزرنیم تلگرام
-    username: {
-
-        type: String,
-
-        default: null
-
-    },
-
-
-    // اسم کاربر
-    name: {
-
-        type: String,
-
-        default: null
-
-    },
-
-
-    // پیام کاربر
-    message: {
-
-        type: String,
-
-        required: true
-
-    },
-
-
-    // پاسخ روبو
-    answer: {
-
-        type: String,
-
-        default: null
-
-    },
-
-
-    // زمان پیام
-    createdAt: {
-
-        type: Date,
-
-        default: Date.now,
-
+    // گروه یا چت خصوصی
+    chatId:{
+        type:String,
+        required:true,
         index:true
+    },
 
+
+    // آیدی واقعی کاربر
+    userId:{
+        type:String,
+        required:true,
+        index:true
+    },
+
+
+    // یوزرنیم
+    username:{
+        type:String,
+        default:null
+    },
+
+
+    // اسم ذخیره شده
+    name:{
+        type:String,
+        default:null
+    },
+
+
+    // پیام
+    message:{
+        type:String,
+        required:true
+    },
+
+
+    // پاسخ
+    answer:{
+        type:String,
+        default:null
+    },
+
+
+    createdAt:{
+        type:Date,
+        default:Date.now,
+        index:true
     }
 
 
@@ -77,8 +65,10 @@ const RoboMemorySchema = new mongoose.Schema({
 
 
 
-// جلوگیری از ساخت دوباره مدل
+// جلوگیری از ساخت مدل دوباره
+
 let RoboMemoryModel = null;
+
 
 
 
@@ -96,7 +86,6 @@ async function getRoboMemoryModel(){
     }
 
 
-
     const connection =
     await connectRoboDatabase();
 
@@ -110,17 +99,21 @@ async function getRoboMemoryModel(){
 
 
 
-    return RoboMemoryModel;
+    console.log(
+        "🤖 ROBO MEMORY MODEL READY ✅"
+    );
 
+
+    return RoboMemoryModel;
 
 }
 
 
 
 
+
 // ======================================================
 // SAVE MEMORY
-// ذخیره گفتگو
 // ======================================================
 
 async function saveMemory(data){
@@ -134,10 +127,31 @@ async function saveMemory(data){
 
 
 
+        if(
+            !data.chatId ||
+            !data.userId ||
+            !data.message
+        ){
+
+            console.log(
+                "❌ INVALID MEMORY DATA"
+            );
+
+            return;
+
+        }
+
+
+
+
         await Model.create({
 
             chatId:
             String(data.chatId),
+
+
+            userId:
+            String(data.userId),
 
 
             username:
@@ -161,16 +175,17 @@ async function saveMemory(data){
 
 
 
-        // ==================================
-        // نگه داشتن فقط 1000 پیام آخر
-        // ==================================
-
+        // فقط 1000 پیام آخر هر کاربر در هر گروه
 
         const count =
         await Model.countDocuments({
 
             chatId:
-            String(data.chatId)
+            String(data.chatId),
+
+
+            userId:
+            String(data.userId)
 
         });
 
@@ -181,25 +196,26 @@ async function saveMemory(data){
         if(count > 1000){
 
 
-            const deleteCount =
+            const remove =
             count - 1000;
 
 
 
-            const oldMessages =
-            await Model
-            .find({
+            const old =
+            await Model.find({
 
                 chatId:
-                String(data.chatId)
+                String(data.chatId),
+
+
+                userId:
+                String(data.userId)
 
             })
             .sort({
-
                 createdAt:1
-
             })
-            .limit(deleteCount);
+            .limit(remove);
 
 
 
@@ -208,24 +224,24 @@ async function saveMemory(data){
             await Model.deleteMany({
 
                 _id:{
-
                     $in:
-                    oldMessages.map(
-                        item=>item._id
-                    )
-
+                    old.map(x=>x._id)
                 }
 
             });
+
 
 
         }
 
 
 
+
+
         console.log(
             "🧠 ROBO MEMORY SAVED"
         );
+
 
 
     }
@@ -248,12 +264,12 @@ async function saveMemory(data){
 
 
 
+
 // ======================================================
-// GET MEMORY
-// دریافت تاریخچه گفتگو
+// GET MEMORY USER
 // ======================================================
 
-async function getMemory(chatId){
+async function getMemory(chatId,userId){
 
 
     try{
@@ -265,12 +281,15 @@ async function getMemory(chatId){
 
 
 
-        const memories =
-        await Model
-        .find({
+        const data =
+        await Model.find({
 
             chatId:
-            String(chatId)
+            String(chatId),
+
+
+            userId:
+            String(userId)
 
         })
         .sort({
@@ -284,7 +303,7 @@ async function getMemory(chatId){
 
 
 
-        return memories.reverse();
+        return data.reverse();
 
 
 
@@ -293,12 +312,13 @@ async function getMemory(chatId){
 
 
         console.log(
-            "❌ ROBO MEMORY READ ERROR:",
+            "❌ MEMORY READ ERROR:",
             error.message
         );
 
 
         return [];
+
 
     }
 
@@ -309,12 +329,14 @@ async function getMemory(chatId){
 
 
 
+
+
+
 // ======================================================
-// GET LAST USER NAME
-// پیدا کردن آخرین اسم کاربر
+// GET USER NAME
 // ======================================================
 
-async function getUserName(chatId){
+async function getUserName(chatId,userId){
 
 
     try{
@@ -326,11 +348,15 @@ async function getUserName(chatId){
 
 
         const user =
-        await Model
-        .findOne({
+        await Model.findOne({
 
             chatId:
             String(chatId),
+
+
+            userId:
+            String(userId),
+
 
             name:{
                 $ne:null
@@ -346,11 +372,19 @@ async function getUserName(chatId){
 
 
 
+
         return user?.name || null;
+
 
 
     }
     catch(error){
+
+
+        console.log(
+            "❌ GET NAME ERROR:",
+            error.message
+        );
 
 
         return null;

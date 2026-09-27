@@ -1,30 +1,39 @@
 // ======================================================
 // ROBO BRAIN SERVICE
-// مدیریت حافظه و آماده سازی اطلاعات برای Gemini
+// مدیریت حافظه اختصاصی هر کاربر
 // ======================================================
 
 
 const {
+
     saveMemory,
     getMemory,
     getUserName
+
 } = require("../models/RoboMemory");
 
 
 
 
+
+
+
 // ======================================================
-// گرفتن حافظه کاربر
+// گرفتن کانتکست کاربر
 // ======================================================
 
-async function getRoboContext(chatId){
+
+async function getRoboContext(chatId,userId){
 
 
     try{
 
 
         const memories =
-        await getMemory(chatId);
+        await getMemory(
+            chatId,
+            userId
+        );
 
 
 
@@ -39,10 +48,11 @@ async function getRoboContext(chatId){
 
 
 
+
         let context = `
 
 تو روبو هستی.
-این تاریخچه گفتگوهای قبلی تو با این کاربر است:
+این تاریخچه گفتگوهای قبلی تو با همین کاربر است:
 
 `;
 
@@ -70,6 +80,7 @@ ${item.answer || ""}
         return context;
 
 
+
     }
     catch(error){
 
@@ -82,7 +93,6 @@ ${item.answer || ""}
 
         return "";
 
-
     }
 
 
@@ -94,22 +104,26 @@ ${item.answer || ""}
 
 
 
+
+
 // ======================================================
-// گرفتن اسم شناخته شده کاربر
+// گرفتن اسم کاربر
 // ======================================================
 
-async function getKnownUserName(chatId){
+
+async function getKnownUserName(chatId,userId){
 
 
     try{
 
 
-        const name =
-        await getUserName(chatId);
+        return await getUserName(
 
+            chatId,
 
+            userId
 
-        return name;
+        );
 
 
     }
@@ -129,12 +143,15 @@ async function getKnownUserName(chatId){
 
 
 
+
+
+
 // ======================================================
 // ذخیره گفتگو
 // ======================================================
 
-async function rememberConversation(data){
 
+async function rememberConversation(data){
 
 
     try{
@@ -147,16 +164,24 @@ async function rememberConversation(data){
             data.chatId,
 
 
+            userId:
+            data.userId,
+
+
+
             username:
             data.username,
+
 
 
             name:
             data.name,
 
 
+
             message:
             data.message,
+
 
 
             answer:
@@ -188,7 +213,9 @@ async function rememberConversation(data){
 
 
 
-module.exports = {
+
+
+module.exports={
 
 
     getRoboContext,
