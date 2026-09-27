@@ -10,6 +10,12 @@ const path = require("path");
 const askGemini =
 require("../ai/gemini");
 
+const {
+    saveMemory,
+    getMemory
+} =
+require("../services/roboMemoryService");
+
 
 console.log(
     "🔥 TELEGRAM BOT FILE LOADED"
@@ -153,7 +159,20 @@ return;
 const text =
 msg.text.trim();
 
+// ===============================
+// ROBO CALL CHECK
+// ===============================
 
+const isRobo =
+text.toLowerCase()
+.includes("روبو");
+
+
+if(!isRobo){
+
+    return;
+
+}
 
 console.log(
 "📩 MESSAGE:",
@@ -337,24 +356,120 @@ file
 
 
 await send(
-msg.chat.id,
-"⏳ دارم فکر می‌کنم..."
+    msg.chat.id,
+    "⏳ دارم فکر می‌کنم..."
 );
+
+
+// ===============================
+// GET ROBO MEMORY
+// ===============================
+
+const memory =
+await getMemory(
+    msg.chat.id
+);
+
+
+
+// تبدیل حافظه به متن برای Gemini
+
+let memoryText = "";
+
+
+
+if(memory.length > 0){
+
+
+    memory.reverse()
+    .forEach(item=>{
+
+
+        memoryText += `
+
+کاربر:
+${item.message}
+
+
+روبو:
+${item.answer}
+
+
+`;
+
+    });
+
+
+}
+
+
+
+// ===============================
+// SEND TO GEMINI
+// ===============================
+
+
+const prompt = `
+
+تو روبو هستی.
+یک دستیار هوشمند دوستانه.
+
+
+تاریخچه گفتگو:
+
+${memoryText}
+
+
+پیام جدید کاربر:
+
+${text}
+
+
+با توجه به تاریخچه جواب بده.
+
+`;
 
 
 
 const answer =
-await askGemini(text);
-
-
-
-return send(
-msg.chat.id,
-answer
+await askGemini(
+    prompt
 );
 
 
 
+// ===============================
+// SAVE MEMORY
+// ===============================
+
+await saveMemory({
+
+    chatId:
+    msg.chat.id,
+
+
+    name:
+    msg.from.first_name || null,
+
+
+    username:
+    msg.from.username || null,
+
+
+    message:
+    text,
+
+
+    answer
+
+});
+
+
+
+return send(
+    msg.chat.id,
+    answer
+);
 });
 
 
