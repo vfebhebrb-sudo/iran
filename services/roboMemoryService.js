@@ -3,11 +3,12 @@ const connectRoboDatabase = require("../database/roboDatabase");
 
 
 // ======================================================
-// ROBO MEMORY MODEL
+// ROBO MEMORY SCHEMA
 // ======================================================
 
 const RoboMemorySchema = new mongoose.Schema({
 
+    // شناسه چت تلگرام
     chatId: {
 
         type: String,
@@ -19,6 +20,7 @@ const RoboMemorySchema = new mongoose.Schema({
     },
 
 
+    // یوزرنیم تلگرام
     username: {
 
         type: String,
@@ -28,6 +30,7 @@ const RoboMemorySchema = new mongoose.Schema({
     },
 
 
+    // اسم کاربر
     name: {
 
         type: String,
@@ -37,6 +40,7 @@ const RoboMemorySchema = new mongoose.Schema({
     },
 
 
+    // پیام کاربر
     message: {
 
         type: String,
@@ -46,6 +50,7 @@ const RoboMemorySchema = new mongoose.Schema({
     },
 
 
+    // پاسخ روبو
     answer: {
 
         type: String,
@@ -55,11 +60,14 @@ const RoboMemorySchema = new mongoose.Schema({
     },
 
 
+    // زمان پیام
     createdAt: {
 
         type: Date,
 
-        default: Date.now
+        default: Date.now,
+
+        index:true
 
     }
 
@@ -68,6 +76,8 @@ const RoboMemorySchema = new mongoose.Schema({
 
 
 
+
+// جلوگیری از ساخت دوباره مدل
 let RoboMemoryModel = null;
 
 
@@ -108,10 +118,9 @@ async function getRoboMemoryModel(){
 
 
 
-
 // ======================================================
-// SAVE MESSAGE
-// ذخیره پیام کاربر و جواب روبو
+// SAVE MEMORY
+// ذخیره گفتگو
 // ======================================================
 
 async function saveMemory(data){
@@ -126,7 +135,6 @@ async function saveMemory(data){
 
 
         await Model.create({
-
 
             chatId:
             String(data.chatId),
@@ -147,15 +155,15 @@ async function saveMemory(data){
             answer:
             data.answer || null
 
-
         });
 
 
 
 
-        // ================================
-        // فقط 1000 پیام آخر هر چت
-        // ================================
+
+        // ==================================
+        // نگه داشتن فقط 1000 پیام آخر
+        // ==================================
 
 
         const count =
@@ -168,11 +176,12 @@ async function saveMemory(data){
 
 
 
+
+
         if(count > 1000){
 
 
-
-            const removeCount =
+            const deleteCount =
             count - 1000;
 
 
@@ -190,11 +199,8 @@ async function saveMemory(data){
                 createdAt:1
 
             })
-            .limit(
+            .limit(deleteCount);
 
-                removeCount
-
-            );
 
 
 
@@ -217,12 +223,17 @@ async function saveMemory(data){
 
 
 
+        console.log(
+            "🧠 ROBO MEMORY SAVED"
+        );
+
+
     }
     catch(error){
 
 
         console.log(
-            "❌ ROBO SAVE MEMORY ERROR:",
+            "❌ ROBO SAVE ERROR:",
             error.message
         );
 
@@ -239,7 +250,7 @@ async function saveMemory(data){
 
 // ======================================================
 // GET MEMORY
-// گرفتن تاریخچه کاربر
+// دریافت تاریخچه گفتگو
 // ======================================================
 
 async function getMemory(chatId){
@@ -253,7 +264,9 @@ async function getMemory(chatId){
 
 
 
-        return await Model
+
+        const memories =
+        await Model
         .find({
 
             chatId:
@@ -270,18 +283,22 @@ async function getMemory(chatId){
 
 
 
+
+        return memories.reverse();
+
+
+
     }
     catch(error){
 
 
         console.log(
-            "❌ ROBO GET MEMORY ERROR:",
+            "❌ ROBO MEMORY READ ERROR:",
             error.message
         );
 
 
         return [];
-
 
     }
 
@@ -293,8 +310,62 @@ async function getMemory(chatId){
 
 
 // ======================================================
-// EXPORT
+// GET LAST USER NAME
+// پیدا کردن آخرین اسم کاربر
 // ======================================================
+
+async function getUserName(chatId){
+
+
+    try{
+
+
+        const Model =
+        await getRoboMemoryModel();
+
+
+
+        const user =
+        await Model
+        .findOne({
+
+            chatId:
+            String(chatId),
+
+            name:{
+                $ne:null
+            }
+
+        })
+        .sort({
+
+            createdAt:-1
+
+        })
+        .lean();
+
+
+
+        return user?.name || null;
+
+
+    }
+    catch(error){
+
+
+        return null;
+
+
+    }
+
+
+}
+
+
+
+
+
+
 
 module.exports = {
 
@@ -303,7 +374,9 @@ module.exports = {
 
     saveMemory,
 
-    getMemory
+    getMemory,
+
+    getUserName
 
 
 };

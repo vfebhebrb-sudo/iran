@@ -1,24 +1,31 @@
 // ======================================================
-// TELEGRAM SMART BOT
+// TELEGRAM SMART ROBO BOT
 // ======================================================
 
 
 const TelegramBot = require("node-telegram-bot-api");
+
 const fs = require("fs");
+
 const path = require("path");
 
 const askGemini =
 require("../ai/gemini");
 
+
+
 const {
     saveMemory,
-    getMemory
+    getMemory,
+    getUserName
+
 } =
 require("../services/roboMemoryService");
 
 
+
 console.log(
-    "🔥 TELEGRAM BOT FILE LOADED"
+"🔥 TELEGRAM ROBO BOT LOADED"
 );
 
 
@@ -41,17 +48,20 @@ path.join(
 
 
 
-// ===============================
-// FILES
-// ===============================
+// ======================================================
+// FILE SYSTEM
+// ======================================================
 
 
 function getFiles(){
 
 
     if(!fs.existsSync(FILE_DIR)){
+
         return [];
+
     }
+
 
 
     return fs
@@ -60,156 +70,48 @@ function getFiles(){
         x=>!x.startsWith(".")
     );
 
+
 }
 
 
 
 
-// ===============================
+
+// ======================================================
 // SEND
-// ===============================
+// ======================================================
 
-async function send(chat, text) {
-    try {
 
-        console.log("📤 SENDING TO:", chat);
-        console.log("📝 TEXT:", text);
+async function send(chat,text){
 
-        const result = await bot.sendMessage(chat, text);
 
-        console.log("✅ MESSAGE SENT:", result.message_id);
+    try{
 
-    } catch (e) {
 
-        console.log("❌ SEND ERROR:", e);
-        console.log("❌ SEND ERROR MESSAGE:", e.message);
+        const result =
+        await bot.sendMessage(
+            chat,
+            text
+        );
+
+
+        console.log(
+            "✅ SENT:",
+            result.message_id
+        );
+
 
     }
-}
-// ===============================
-// START
-// ===============================
+    catch(error){
 
 
-function startBot(){
+        console.log(
+            "SEND ERROR:",
+            error.message
+        );
 
 
-
-if(!TOKEN){
-
-console.log(
-"❌ TELEGRAM_TOKEN missing"
-);
-
-return;
-
-}
-
-
-
-bot = new TelegramBot(
-    TOKEN,
-    {
-        polling:true
     }
-);
-
-
-
-console.log(
-"🤖 Telegram Smart Bot Started"
-);
-
-
-
-
-// تست
-
-bot.getMe()
-.then(me=>{
-
-console.log(
-"✅ Connected:",
-me.username
-);
-
-
-});
-
-
-
-
-
-
-// ===============================
-// ALL MESSAGE
-// ===============================
-
-
-bot.on(
-"message",
-async(msg)=>{
-
-
-if(!msg.text)
-return;
-
-
-
-const text =
-msg.text.trim();
-
-// ===============================
-// ROBO CALL CHECK
-// ===============================
-
-const isRobo =
-text.toLowerCase()
-.includes("روبو");
-
-
-if(!isRobo){
-
-    return;
-
-}
-
-console.log(
-"📩 MESSAGE:",
-text
-);
-
-
-
-
-
-// ----------------
-// START
-// ----------------
-
-
-if(text === "/start"){
-
-
-return send(
-msg.chat.id,
-
-
-`👋 سلام ${msg.from.first_name || ""}
-
-
-🤖 ربات هوشمند فعال شد.
-
-
-دستورات:
-
-📁 لیست فایل ها
-
-📥 دریافت 1
-
-یا هر سوالی داری بپرس.`
-
-);
 
 
 }
@@ -217,23 +119,103 @@ msg.chat.id,
 
 
 
-
-// ----------------
-// سلام
-// ----------------
-
-
-if(
-text === "سلام"
-){
+// ======================================================
+// CHECK ROBO CALL
+// ======================================================
 
 
-return send(
-msg.chat.id,
+function isRoboCalled(text){
 
-"سلام 👋\nربات فعاله ✅"
 
-);
+    const value =
+    text
+    .toLowerCase();
+
+
+
+    return (
+
+        value.includes("روبو")
+
+        ||
+
+        value.includes("robo")
+
+    );
+
+
+}
+
+
+
+
+// ======================================================
+// REMOVE ROBO WORD
+// ======================================================
+
+
+function cleanMessage(text){
+
+
+    return text
+    .replace(/روبو/gi,"")
+    .trim();
+
+
+}
+
+
+
+
+// ======================================================
+// EXTRACT USER NAME
+// ======================================================
+
+
+function extractName(text){
+
+
+    const patterns = [
+
+
+        /اسم من (.+)/,
+
+        /منو (.+) صدا کن/,
+
+        /اسمم (.+) هست/,
+
+        /اسمم (.+) است/
+
+
+    ];
+
+
+
+    for(
+        const regex of patterns
+    ){
+
+
+        const match =
+        text.match(regex);
+
+
+
+        if(match){
+
+
+            return match[1]
+            .trim();
+
+
+        }
+
+
+    }
+
+
+
+    return null;
 
 
 }
@@ -242,150 +224,33 @@ msg.chat.id,
 
 
 
-// ----------------
-// FILE LIST
-// ----------------
 
+// ======================================================
+// BUILD MEMORY CONTEXT
+// ======================================================
 
-if(
-text === "لیست فایل ها"
-){
 
+async function buildContext(chatId){
 
-const files =
-getFiles();
 
+    const memories =
+    await getMemory(chatId);
 
 
-if(files.length===0){
 
-return send(
-msg.chat.id,
-"❌ فایلی وجود ندارد"
-);
+    let context = "";
 
-}
 
 
+    if(memories.length){
 
-let result =
-"📁 فایل‌ها:\n\n";
 
+        memories
+        .reverse()
+        .forEach(item=>{
 
 
-files.forEach(
-(file,index)=>{
-
-result +=
-`${index+1}️⃣ ${file}\n`;
-
-});
-
-
-
-return send(
-msg.chat.id,
-result
-);
-
-
-}
-
-
-
-
-
-// ----------------
-// SEND FILE
-// ----------------
-
-
-const match =
-text.match(
-/دریافت\s+(\d+)/
-);
-
-
-
-if(match){
-
-
-const index =
-Number(match[1])-1;
-
-
-const files =
-getFiles();
-
-
-const file =
-files[index];
-
-
-
-if(!file){
-
-return send(
-msg.chat.id,
-"❌ فایل پیدا نشد"
-);
-
-}
-
-
-
-return bot.sendDocument(
-msg.chat.id,
-path.join(
-FILE_DIR,
-file
-)
-);
-
-
-}
-
-
-
-
-
-// ----------------
-// GEMINI
-// ----------------
-
-
-
-await send(
-    msg.chat.id,
-    "⏳ دارم فکر می‌کنم..."
-);
-
-
-// ===============================
-// GET ROBO MEMORY
-// ===============================
-
-const memory =
-await getMemory(
-    msg.chat.id
-);
-
-
-
-// تبدیل حافظه به متن برای Gemini
-
-let memoryText = "";
-
-
-
-if(memory.length > 0){
-
-
-    memory.reverse()
-    .forEach(item=>{
-
-
-        memoryText += `
+            context += `
 
 کاربر:
 ${item.message}
@@ -397,96 +262,501 @@ ${item.answer}
 
 `;
 
-    });
+        });
+
+
+
+    }
+
+
+
+    const name =
+    await getUserName(chatId);
+
+
+
+    return `
+
+
+تو روبو هستی.
+
+نام کاربر:
+${name || "نامشخص"}
+
+
+تاریخچه گفتگو:
+
+
+${context}
+
+
+`;
+
+}
+
+
+
+
+
+
+// ======================================================
+// START BOT
+// ======================================================
+
+
+function startBot(){
+
+
+
+if(!TOKEN){
+
+
+console.log(
+"❌ TELEGRAM TOKEN MISSING"
+);
+
+
+return;
 
 
 }
 
 
 
-// ===============================
-// SEND TO GEMINI
-// ===============================
 
 
-const prompt = `
+bot =
+new TelegramBot(
 
-تو روبو هستی.
-یک دستیار هوشمند دوستانه.
+    TOKEN,
+
+    {
+        polling:true
+    }
+
+);
 
 
-تاریخچه گفتگو:
 
-${memoryText}
+
+
+console.log(
+"🤖 ROBO STARTED"
+);
+
+
+
+
+
+bot.getMe()
+.then(me=>{
+
+
+console.log(
+"CONNECTED:",
+me.username
+);
+
+
+});
+
+
+
+
+
+// ادامه در بخش ۲...
+
+// ======================================================
+// MESSAGE HANDLER
+// ======================================================
+
+
+bot.on(
+"message",
+async(msg)=>{
+
+
+    try{
+
+
+        if(!msg.text)
+            return;
+
+
+
+        const text =
+        msg.text.trim();
+
+
+
+        console.log(
+            "📩 MESSAGE:",
+            text
+        );
+
+
+
+        // ==========================================
+        // دستورات فایل مستقل هستند
+        // ==========================================
+
+
+        if(text === "لیست فایل ها"){
+
+
+            const files =
+            getFiles();
+
+
+
+            if(files.length===0){
+
+
+                return send(
+                    msg.chat.id,
+                    "❌ فایلی وجود ندارد"
+                );
+
+
+            }
+
+
+
+            let result =
+            "📁 فایل‌ها:\n\n";
+
+
+
+            files.forEach(
+                (file,index)=>{
+
+
+                    result +=
+                    `${index+1}️⃣ ${file}\n`;
+
+
+                }
+            );
+
+
+
+            return send(
+                msg.chat.id,
+                result
+            );
+
+
+        }
+
+
+
+
+
+        // ==========================================
+        // دریافت فایل
+        // ==========================================
+
+
+        const fileMatch =
+        text.match(
+            /دریافت\s+(\d+)/
+        );
+
+
+
+        if(fileMatch){
+
+
+            const index =
+            Number(fileMatch[1])-1;
+
+
+
+            const files =
+            getFiles();
+
+
+
+            const file =
+            files[index];
+
+
+
+            if(!file){
+
+
+                return send(
+                    msg.chat.id,
+                    "❌ فایل پیدا نشد"
+                );
+
+
+            }
+
+
+
+            return bot.sendDocument(
+
+                msg.chat.id,
+
+                path.join(
+                    FILE_DIR,
+                    file
+                )
+
+            );
+
+
+        }
+
+
+
+
+
+
+
+        // ==========================================
+        // فقط وقتی روبو صدا زده شد
+        // ==========================================
+
+
+        if(!isRoboCalled(text)){
+
+
+            return;
+
+
+        }
+
+
+
+
+        const cleanText =
+        cleanMessage(text);
+
+
+
+
+        console.log(
+            "🤖 ROBO REQUEST:",
+            cleanText
+        );
+
+
+
+
+
+        // ==========================================
+        // تشخیص اسم
+        // ==========================================
+
+
+        const detectedName =
+        extractName(cleanText);
+
+
+
+
+        let userName = null;
+
+
+
+        if(detectedName){
+
+
+            userName =
+            detectedName;
+
+
+
+            console.log(
+                "🧠 NEW NAME:",
+                userName
+            );
+
+
+        }
+
+
+
+
+
+        // ==========================================
+        // وضعیت فکر کردن
+        // ==========================================
+
+
+        await send(
+
+            msg.chat.id,
+
+            "⏳ دارم فکر می‌کنم..."
+
+        );
+
+
+
+
+
+
+        // ==========================================
+        // گرفتن حافظه
+        // ==========================================
+
+
+        const context =
+        await buildContext(
+            msg.chat.id
+        );
+
+
+
+
+
+
+
+        // ==========================================
+        // درخواست به Gemini
+        // ==========================================
+
+
+        const prompt = `
+
+
+${context}
+
 
 
 پیام جدید کاربر:
 
-${text}
+${cleanText}
 
 
-با توجه به تاریخچه جواب بده.
+
+قوانین:
+
+- تو روبو هستی.
+- دوستانه جواب بده.
+- اگر اسم کاربر را در حافظه داری استفاده کن.
+- اگر کاربر قبلاً چیزی گفته از تاریخچه استفاده کن.
+- وانمود نکن چیزی را می‌دانی که در حافظه نیست.
+
 
 `;
 
 
 
-const answer =
-await askGemini(
-    prompt
-);
+
+        const answer =
+        await askGemini(
+            prompt
+        );
 
 
 
-// ===============================
-// SAVE MEMORY
-// ===============================
-
-await saveMemory({
-
-    chatId:
-    msg.chat.id,
 
 
-    name:
-    msg.from.first_name || null,
+
+        // ==========================================
+        // ذخیره حافظه
+        // ==========================================
 
 
-    username:
-    msg.from.username || null,
+        await saveMemory({
 
 
-    message:
-    text,
+
+            chatId:
+
+            String(
+                msg.chat.id
+            ),
 
 
-    answer
+
+            username:
+
+            msg.from.username ||
+            null,
+
+
+
+            name:
+
+            userName ||
+            null,
+
+
+
+            message:
+
+            cleanText,
+
+
+
+            answer
+
+
+
+        });
+
+
+
+
+
+
+
+        return send(
+
+            msg.chat.id,
+
+            answer
+
+        );
+
+
+
+
+
+    }
+    catch(error){
+
+
+
+        console.log(
+            "❌ ROBO MESSAGE ERROR:",
+            error.message
+        );
+
+
+
+    }
+
+
 
 });
 
 
 
-return send(
-    msg.chat.id,
-    answer
-);
-});
 
 
 
+// ======================================================
+// POLLING ERROR
+// ======================================================
 
-
-// ERROR
 
 bot.on(
 "polling_error",
 (error)=>{
+
 
 console.log(
 "POLLING ERROR:",
 error.message
 );
 
+
 }
 
 );
@@ -496,9 +766,14 @@ error.message
 }
 
 
+
+
+
+
 // ======================================================
-// NEW FILE NOTIFICATION
+// NEW FILE NOTIFY
 // ======================================================
+
 
 async function notifyNewFile(data){
 
@@ -511,47 +786,27 @@ async function notifyNewFile(data){
 
 
 
-        if(!chat){
-
-            console.log(
-                "❌ TELEGRAM_ADMIN_ID missing"
-            );
-
+        if(!chat)
             return;
 
-        }
 
 
+        const text = `
 
-        const text =
-`
-📥 فایل جدید سایت دریافت شد
-
-━━━━━━━━━━━━━━
-
-📄 نام فایل:
-${data.name}
+📥 فایل جدید سایت
 
 
-📚 درس:
-${data.lesson || "نامشخص"}
+📄 ${data.name}
 
 
-📦 حجم:
-${data.size} bytes
+📚 ${data.lesson || "نامشخص"}
 
 
-🆔 شناسه فایل:
-${data.fileId}
+📦 ${data.size} bytes
 
-
-🔗 لینک مشاهده:
-${data.link || "ندارد"}
-
-
-━━━━━━━━━━━━━━
 
 🤖 Riseo File Bot
+
 `;
 
 
@@ -562,9 +817,11 @@ ${data.link || "ندارد"}
         );
 
 
+
         console.log(
-            "✅ Telegram new file sent"
+            "✅ NEW FILE SENT"
         );
+
 
 
     }
@@ -572,19 +829,28 @@ ${data.link || "ندارد"}
 
 
         console.log(
-            "❌ TELEGRAM NOTIFY ERROR:",
+            "❌ NOTIFY ERROR:",
             error.message
         );
 
 
     }
 
+
 }
 
-module.exports={
+
+
+
+
+
+
+module.exports = {
+
 
     startBot,
 
     notifyNewFile
+
 
 };
