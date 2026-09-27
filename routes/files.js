@@ -5,6 +5,12 @@ const path = require("path");
 
 const File = require("../models/File");
 
+const authenticateUser =
+    require("../middleware/auth");
+
+const specialUser =
+    require("../middleware/specialUser");
+
 const router = express.Router();
 const TEMP_DIR =
 path.join(
@@ -533,5 +539,126 @@ url:
 
 });
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+// =====================================================
+// DELETE FILE — SPECIAL USER ONLY
+// =====================================================
+
+router.delete(
+    "/:id",
+    authenticateUser,
+    specialUser,
+    async (req, res) => {
+
+        try {
+
+            const file =
+                await File.findById(req.params.id);
+
+            if (!file) {
+
+                return res.status(404).json({
+                    success: false,
+                    message: "فایل پیدا نشد"
+                });
+
+            }
+
+            // -----------------------------------------
+            // حذف فایل PDF ذخیره‌شده در temp-files
+            // -----------------------------------------
+
+            const fileName =
+                `${file._id}.pdf`;
+
+            const filePath =
+                path.join(
+                    TEMP_DIR,
+                    fileName
+                );
+
+            if (fs.existsSync(filePath)) {
+
+                fs.unlinkSync(filePath);
+
+                console.log(
+                    "🗑️ TEMP PDF DELETED:",
+                    fileName
+                );
+
+            }
+
+            // -----------------------------------------
+            // حذف رکورد فایل از MongoDB
+            // -----------------------------------------
+
+            await File.findByIdAndDelete(
+                req.params.id
+            );
+
+            console.log(
+                "🗑️ FILE DELETED:",
+                file.name
+            );
+
+            return res.json({
+                success: true,
+                message: "فایل با موفقیت حذف شد",
+                file: {
+                    id: file._id,
+                    name: file.name
+                }
+            });
+
+        } catch (error) {
+
+            console.error(
+                "❌ DELETE FILE ERROR:",
+                error
+            );
+
+            return res.status(500).json({
+                success: false,
+                message: "خطا در حذف فایل"
+            });
+
+        }
+
+    }
+);
 
 module.exports = router;
