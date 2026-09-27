@@ -553,6 +553,15 @@ msg.from.username || null;
         const cleanText =
         cleanMessage(text);
 
+        if(!cleanText){
+
+    return send(
+        msg.chat.id,
+        "بله؟ گوشم با توئه 👋"
+    );
+
+}
+
         // ==========================================
 // STATIC ROBO COMMANDS
 // ==========================================
