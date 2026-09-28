@@ -1,100 +1,308 @@
-const { GoogleGenerativeAI } = require("@google/generative-ai");
+const {
+    GoogleGenerativeAI
+}
+=
+require("@google/generative-ai");
 
-const genAI = new GoogleGenerativeAI(
+
+
+const genAI =
+new GoogleGenerativeAI(
     process.env.GEMINI_API_KEY
 );
 
-const model = genAI.getGenerativeModel({
-    model: "gemini-3.5-flash-lite"
-});
 
 
-// =======================================
-// TEXT GEMINI
-// =======================================
 
-async function askGemini(text){
+// =================================================
+// GEMINI MODEL POOL
+// =================================================
+// =================================================
+// GEMINI MODEL POOL
+// =================================================
 
-    try{
 
-        const result =
-            await model.generateContent(text);
+const models = [
 
-        return result.response.text();
+
+    {
+        name:"gemini-3.5-flash-lite",
+
+        model:
+        genAI.getGenerativeModel({
+            model:"gemini-3.5-flash-lite"
+        })
+    },
+
+
+
+    {
+        name:"gemini-2.0-flash",
+
+        model:
+        genAI.getGenerativeModel({
+            model:"gemini-2.0-flash"
+        })
+    },
+
+
+
+    {
+        name:"gemini-2.0-flash-lite",
+
+        model:
+        genAI.getGenerativeModel({
+            model:"gemini-2.0-flash-lite"
+        })
+    },
+
+
+
+    {
+        name:"gemini-1.5-flash",
+
+        model:
+        genAI.getGenerativeModel({
+            model:"gemini-1.5-flash"
+        })
+    },
+
+
+
+    {
+        name:"gemini-1.5-flash-8b",
+
+        model:
+        genAI.getGenerativeModel({
+            model:"gemini-1.5-flash-8b"
+        })
+    }
+
+
+];
+
+
+
+
+
+// =================================================
+// SMART MODEL SELECTOR
+// =================================================
+
+
+async function generateWithAnyModel(prompt){
+
+
+
+    for(
+        const item of models
+    ){
+
+
+
+        try{
+
+
+            console.log(
+                "🧠 TRY GEMINI MODEL:",
+                item.name
+            );
+
+
+
+            const result =
+            await item.model.generateContent(
+                prompt
+            );
+
+
+
+            const text =
+            result.response.text();
+
+
+
+            if(text){
+
+
+                console.log(
+                    "✅ USING MODEL:",
+                    item.name
+                );
+
+
+
+                return text;
+
+
+            }
+
+
+
+        }
+
+        catch(error){
+
+
+            console.log(
+
+                "❌ MODEL FAILED:",
+                item.name,
+
+                error.message
+
+            );
+
+
+        }
+
+
 
     }
 
-    catch(error){
 
-        console.log(
-            "GEMINI ERROR:",
-            error.message
-        );
 
-        return "❌ الان هوش مصنوعی در دسترس نیست.";
 
-    }
+    console.log(
+        "🚨 ALL GEMINI MODELS FAILED"
+    );
+
+
+    return null;
+
 
 }
 
 
-// =======================================
-// PDF GEMINI
-// =======================================
+
+
+
+
+
+
+
+// =================================================
+// TEXT AI
+// =================================================
+
+
+async function askGemini(text){
+
+
+    return await generateWithAnyModel(text);
+
+
+}
+
+
+
+
+
+
+
+
+
+// =================================================
+// PDF AI
+// =================================================
+
 
 async function askGeminiPdf(
     pdfBuffer,
     prompt
 ){
 
-    try{
 
-        const result =
-            await model.generateContent([
+    for(
+        const item of models
+    ){
+
+
+        try{
+
+
+            console.log(
+                "📄 TRY PDF MODEL:",
+                item.name
+            );
+
+
+
+            const result =
+            await item.model.generateContent([
+
+
 
                 {
-                    text: prompt
+                    text:prompt
                 },
 
+
+
                 {
-                    inlineData: {
+
+                    inlineData:{
+
 
                         mimeType:
-                            "application/pdf",
+                        "application/pdf",
+
 
                         data:
-                            pdfBuffer.toString("base64")
+                        pdfBuffer.toString("base64")
+
 
                     }
 
+
                 }
+
+
 
             ]);
 
 
-        return result.response.text();
+
+            return result.response.text();
+
+
+
+        }
+
+
+        catch(error){
+
+
+
+            console.log(
+                "PDF MODEL FAILED:",
+                item.name
+            );
+
+
+        }
+
+
 
     }
 
-    catch(error){
 
-        console.log(
-            "GEMINI PDF ERROR:",
-            error.message
-        );
 
-        return "❌ الان هوش مصنوعی در دسترس نیست.";
+    return null;
 
-    }
 
 }
 
 
-// =======================================
-// EXPORT
-// =======================================
+
+
+
+
+
+
 
 module.exports = askGemini;
 
+
 module.exports.askGeminiPdf =
-    askGeminiPdf;
+askGeminiPdf;
