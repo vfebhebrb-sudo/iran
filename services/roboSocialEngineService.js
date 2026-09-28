@@ -1,206 +1,153 @@
-
-const askGemini =
-require("../ai/gemini");
-
-
-const {
-    buildRoboContext
-}
-=
-require("./roboIntelligenceService");
-
-
-
-
-
-
-
 // ======================================================
 // ROBO SOCIAL ENGINE
 // موتور اجتماعی روبو
 // ======================================================
 
 
+const askGemini =
+require("../ai/gemini");
+
+
+
 const {
-    analyzeMessage
+
+    buildRoboContext,
+    isDirectRoboCall,
+    getDecisionPrompt
+
 }
 =
 require("./roboIntelligenceService");
 
 
 
-const cooldown = new Map();
 
 
+// ======================================================
+// DECIDE GROUP BEHAVIOR
+// تصمیم گیری توسط هوش مصنوعی
+// ======================================================
 
 
-
-function canSpeak(chatId){
-
-
-    const last =
-    cooldown.get(chatId);
-
-
-    if(!last)
-        return true;
-
-
-
-    const diff =
-    Date.now()-last;
-
-
-
-    // جلوگیری از زیاد حرف زدن
-    if(diff < 60000){
-        return false;
-    }
-
-
-
-    return true;
-
-}
-
-
-
-
-
-
-
-function markSpoken(chatId){
-
-    cooldown.set(
-        chatId,
-        Date.now()
-    );
-
-}
-
-
-
-
-
-
-
-
-
-async function shouldRoboJoin(data){
-
-
-
-    const analysis =
-    await analyzeMessage(data);
-
-
-
-    const decision =
-    analysis.decision;
-
-
-
-    if(!decision.reply)
-        return false;
-
-
-
-    if(decision.confidence < 60)
-        return false;
-
-
-
-    if(!canSpeak(data.chatId))
-        return false;
-
-
-
-    return {
-
-
-        join:true,
-
-        analysis
-
-
-    };
-
-
-}
-
-
-
-
-
-
-
-
-function randomDelay(){
-
-
-    return (
-        Math.floor(
-            Math.random()*25000
-        )
-        +
-        5000
-    );
-
-
-}
-
-
-
-async function generateSocialReply(data){
-
-
-    const {
-
-        analysis,
-        message
-
-    } = data;
-
-
+async function decideGroupAction(data){
 
 
     const context =
-    buildRoboContext(
-        analysis
-    );
-
-
+    await buildRoboContext(data);
 
 
 
     const prompt = `
 
 
-${context}
+${getDecisionPrompt()}
 
 
 
-پیام جدید گروه:
-
-${message}
+اطلاعات گفتگو:
 
 
-
-تو الان عضو گروه هستی.
-
-تصمیم بگیر آیا جواب طبیعی بدهی.
-
-اگر جواب می‌دهی:
-
-- کوتاه باشد.
-- دوستانه باشد.
-- مثل یک دوست حرف بزن.
-- اگر مناسب بود شوخی کوچک کن.
-- اگر نیاز به پیشنهاد است، پیشنهاد بده.
-- اگر موضوع شخصی است، محترمانه رفتار کن.
+${JSON.stringify(
+    context,
+    null,
+    2
+)}
 
 
-هیچ وقت توضیح نده که هوش مصنوعی هستی.
+
+فقط JSON برگردان.
+
+
+`;
+
+
+
+    const result =
+    await askGemini(prompt);
+
+
+
+    try{
+
+
+        return JSON.parse(result);
+
+
+    }
+    catch(error){
+
+
+        return {
+
+
+            reply:false,
+
+            reason:"invalid_ai_response"
+
+
+        };
+
+
+    }
+
+
+}
+
+
+
+
+
+
+
+
+
+// ======================================================
+// GENERATE REPLY
+// ساخت جواب
+// ======================================================
+
+
+async function generateRoboReply(data){
+
+
+    const context =
+    await buildRoboContext(data);
+
+
+
+    const prompt = `
+
+
+تو روبو هستی.
+
+
+شخصیت:
+
+- گرم
+- دوستانه
+- کمی شوخ
+- کمک کننده
+
+
+اطلاعات:
+
+${JSON.stringify(
+    context,
+    null,
+    2
+)}
+
+
+
+جواب طبیعی بده.
+
+
+قوانین:
+
+- کوتاه باش.
+- مثل دوست حرف بزن.
+- اگر مناسب بود شوخی کن.
+- اگر چیزی نمی‌دانی حدس نزن.
 
 
 
@@ -208,30 +155,123 @@ ${message}
 
 
 
-
-
-    const answer =
-    await askGemini(prompt);
-
-
-
-    return answer;
+    return await askGemini(prompt);
 
 
 
 }
 
 
+
+
+
+
+
+
+// ======================================================
+// MAIN HANDLER
+// ======================================================
+
+
+async function handleRoboMessage(data){
+
+
+
+    const direct =
+    isDirectRoboCall(
+        data.message
+    );
+
+
+
+
+
+    // --------------------------
+    // صدا زدن مستقیم
+    // --------------------------
+
+
+    if(direct){
+
+
+        return {
+
+
+            shouldReply:true,
+
+
+            answer:
+            await generateRoboReply(data)
+
+
+        };
+
+
+    }
+
+
+
+
+
+
+    // --------------------------
+    // گپ گروهی
+    // --------------------------
+
+
+    const decision =
+    await decideGroupAction(data);
+
+
+
+
+    if(!decision.reply){
+
+
+        return {
+
+
+            shouldReply:false
+
+
+        };
+
+
+    }
+
+
+
+
+    return {
+
+
+        shouldReply:true,
+
+
+        answer:
+        await generateRoboReply(data)
+
+
+
+    };
+
+
+
+}
+
+
+
+
+
+
 module.exports={
 
 
-    shouldRoboJoin,
+    handleRoboMessage,
 
-    markSpoken,
+    decideGroupAction,
 
-    randomDelay,
-
-    generateSocialReply
+    generateRoboReply
 
 
 };

@@ -45,13 +45,6 @@ getRecentGroupMessages
 require("../services/roboGroupMemoryService");
 
 
-const {
-    analyzeMessage,
-    buildRoboContext
-}
-=
-require("../services/roboIntelligenceService");
-
 
 const {
     shouldRoboJoin,
@@ -424,9 +417,9 @@ me.username
 
 
 // ادامه در بخش ۲...
-
 // ======================================================
 // MESSAGE HANDLER
+// ROBO MAIN BRAIN
 // ======================================================
 
 
@@ -435,24 +428,27 @@ bot.on(
 async(msg)=>{
 
 
-    try{
+try{
 
 
-        if(!msg.text)
-            return;
+if(!msg.text)
+return;
 
 
 
-        const text =
-        msg.text.trim();
+const text =
+msg.text.trim();
 
 
-        const chatId =
+
+const chatId =
 String(msg.chat.id);
+
 
 
 const userId =
 String(msg.from.id);
+
 
 
 const username =
@@ -460,25 +456,31 @@ msg.from.username || null;
 
 
 
-        console.log(
-            "📩 MESSAGE:",
-            text
-        );
+console.log(
+"📩 MESSAGE:",
+text
+);
 
-        // ذخیره همه پیام های گروه
+
+
+
+// ======================================================
+// SAVE GROUP MEMORY
+// ======================================================
+
 
 if(msg.chat.type !== "private"){
 
 
 await saveGroupMessage({
 
-    chatId,
+chatId,
 
-    userId,
+userId,
 
-    username,
+username,
 
-    message:text
+message:text
 
 });
 
@@ -486,70 +488,366 @@ await saveGroupMessage({
 }
 
 
-if(msg.chat.type !== "private"){
 
 
-const social =
-await shouldRoboJoin({
+// ======================================================
+// DETECT DIRECT ROBO CALL
+// ======================================================
 
-    chatId,
 
-    userId,
+const directCall =
+isRoboCalled(text);
 
-    message:text
+
+
+
+
+
+// ======================================================
+// FILE COMMANDS
+// ======================================================
+
+
+if(text === "لیست فایل ها"){
+
+
+const files =
+getFiles();
+
+
+
+if(files.length===0){
+
+
+return send(
+
+msg.chat.id,
+
+"❌ فایلی وجود ندارد"
+
+);
+
+
+}
+
+
+
+let result =
+"📁 فایل‌ها:\n\n";
+
+
+
+files.forEach(
+(file,index)=>{
+
+
+result +=
+`${index+1}️⃣ ${file}\n`;
+
 
 });
 
 
 
+return send(
+
+msg.chat.id,
+
+result
+
+);
+
+
+
+}
+
+
+
+
+
+
+
+const fileMatch =
+text.match(
+/دریافت\s+(\d+)/
+);
+
+
+
+if(fileMatch){
+
+
+
+const index =
+Number(fileMatch[1])-1;
+
+
+
+const files =
+getFiles();
+
+
+
+const file =
+files[index];
+
+
+
+if(!file){
+
+
+return send(
+
+msg.chat.id,
+
+"❌ فایل پیدا نشد"
+
+);
+
+
+}
+
+
+
+return bot.sendDocument(
+
+msg.chat.id,
+
+path.join(
+FILE_DIR,
+file
+)
+
+);
+
+
+}
+
+
+
+
+
+
+// ======================================================
+// DIRECT ROBO MODE
+// اگر صدا زده شد همیشه جواب بده
+// ======================================================
+
+
 if(
-    social.join
+!directCall
+)
+return;
+
+
+
+
+const cleanText =
+cleanMessage(text);
+
+
+
+if(!cleanText){
+
+
+return send(
+
+msg.chat.id,
+
+"بله؟ گوشم با توئه 👋"
+
+);
+
+
+}
+
+
+
+
+
+
+console.log(
+"🤖 ROBO REQUEST:",
+cleanText
+);
+
+
+
+
+
+
+// ======================================================
+// STATIC COMMANDS
+// ======================================================
+
+
+const lower =
+cleanText.toLowerCase();
+
+
+
+
+if(
+
+lower.includes("لینک سایت")
+
+||
+
+lower.includes("آدرس سایت")
+
 ){
 
-setTimeout(async()=>{
 
 
-try{
+return send(
+
+msg.chat.id,
 
 
-    markSpoken(chatId);
+`🌐 لینک سایت:
 
 
-
-    console.log(
-        "🤖 ROBO JOINING CHAT"
-    );
+https://vfebhebrb-sudo.github.io/Riseo/
 
 
+هر وقت خواستی بگو:
+روبو لینک سایت رو بده`
+
+);
 
 
-    const answer =
-    await generateSocialReply({
-
-        analysis:social.analysis,
-
-        message:text
-
-    });
+}
 
 
 
 
 
 
-    if(answer){
+
+// ======================================================
+// THINKING
+// ======================================================
 
 
-        await bot.sendMessage(
+await send(
 
-            chatId,
+msg.chat.id,
 
-            answer
+"⏳ دارم فکر می‌کنم..."
 
-        );
+);
 
 
-    }
+
+
+
+
+
+
+// ======================================================
+// MEMORY CONTEXT
+// ======================================================
+
+
+const context =
+await buildContext(
+
+chatId,
+
+userId
+
+);
+
+
+
+
+
+
+// ======================================================
+// GEMINI
+// تصمیم اصلی دست هوش مصنوعی
+// ======================================================
+
+
+
+const prompt = `
+
+
+
+تو روبو هستی.
+
+یک عضو اجتماعی گروه.
+
+
+
+پیام کاربر:
+
+${cleanText}
+
+
+
+اطلاعات گفتگو:
+
+${context}
+
+
+
+قوانین:
+
+- چون کاربر مستقیم تو را صدا زده حتما جواب بده.
+- طبیعی حرف بزن.
+- کوتاه و دوستانه باش.
+- اگر مناسب بود شوخی کوچک کن.
+- اگر کاربر مشکل دارد کمک کن.
+- اگر پیشنهاد خواست چند ایده بده.
+- مثل ربات خشک جواب نده.
+
+
+`;
+
+
+
+
+
+
+const answer =
+await askGemini(prompt);
+
+
+
+
+
+
+// ======================================================
+// SAVE MEMORY
+// ======================================================
+
+
+await saveMemory({
+
+chatId,
+
+userId,
+
+username,
+
+message:cleanText,
+
+answer
+
+});
+
+
+
+
+
+return send(
+
+msg.chat.id,
+
+answer
+
+);
 
 
 
@@ -559,477 +857,18 @@ catch(error){
 
 
 console.log(
-"❌ SOCIAL REPLY ERROR:",
+
+"❌ ROBO MESSAGE ERROR:",
+
 error.message
+
 );
 
 
 }
 
 
-
-}, randomDelay());
-
-}
-
-
-
-}
-
-
-        // ==========================================
-        // دستورات فایل مستقل هستند
-        // ==========================================
-
-
-        if(text === "لیست فایل ها"){
-
-
-            const files =
-            getFiles();
-
-
-
-            if(files.length===0){
-
-
-                return send(
-                    msg.chat.id,
-                    "❌ فایلی وجود ندارد"
-                );
-
-
-            }
-
-
-
-            let result =
-            "📁 فایل‌ها:\n\n";
-
-
-
-            files.forEach(
-                (file,index)=>{
-
-
-                    result +=
-                    `${index+1}️⃣ ${file}\n`;
-
-
-                }
-            );
-
-
-
-            return send(
-                msg.chat.id,
-                result
-            );
-
-
-        }
-
-
-
-
-
-        // ==========================================
-        // دریافت فایل
-        // ==========================================
-
-
-        const fileMatch =
-        text.match(
-            /دریافت\s+(\d+)/
-        );
-
-
-
-        if(fileMatch){
-
-
-            const index =
-            Number(fileMatch[1])-1;
-
-
-
-            const files =
-            getFiles();
-
-
-
-            const file =
-            files[index];
-
-
-
-            if(!file){
-
-
-                return send(
-                    msg.chat.id,
-                    "❌ فایل پیدا نشد"
-                );
-
-
-            }
-
-
-
-            return bot.sendDocument(
-
-                msg.chat.id,
-
-                path.join(
-                    FILE_DIR,
-                    file
-                )
-
-            );
-
-
-        }
-
-
-
-
-
-
-
-        // ==========================================
-        // فقط وقتی روبو صدا زده شد
-        // ==========================================
-
-
-        if(!isRoboCalled(text)){
-
-
-            return;
-
-
-        }
-
-
-
-
-        const cleanText =
-        cleanMessage(text);
-
-        if(!cleanText){
-
-    return send(
-        msg.chat.id,
-        "بله؟ گوشم با توئه 👋"
-    );
-
-}
-
-        // ==========================================
-// STATIC ROBO COMMANDS
-// ==========================================
-
-
-const lowerText =
-cleanText.toLowerCase();
-
-
-
-// لینک سایت
-
-if(
-    lowerText.includes("لینک سایت") ||
-    lowerText.includes("آدرس سایت") ||
-    lowerText.includes("سایت رو بده")
-){
-
-
-    return send(
-
-        msg.chat.id,
-
-`🌐 لینک سایت:
-
-https://vfebhebrb-sudo.github.io/Riseo/
-
-
-هر وقت خواستی بگو:
-«روبو لینک سایت رو بده»`
-
-    );
-
-
-}
-
-
-
-
-        console.log(
-            "🤖 ROBO REQUEST:",
-            cleanText
-        );
-
-
-
-
-
-        // ==========================================
-        // تشخیص اسم
-        // ==========================================
-
-
-        const detectedName =
-        extractName(cleanText);
-
-
-
-
-        let userName = null;
-
-
-
-        if(detectedName){
-
-
-            userName =
-            detectedName;
-
-
-
-            console.log(
-                "🧠 NEW NAME:",
-                userName
-            );
-
-
-        }
-
-
-
-
-
-        // ==========================================
-        // وضعیت فکر کردن
-        // ==========================================
-
-
-        await send(
-
-            msg.chat.id,
-
-            "⏳ دارم فکر می‌کنم..."
-
-        );
-
-
-
-
-
-
-        // ==========================================
-        // گرفتن حافظه
-        // ==========================================
-
-
-            const context =
-            await buildContext(
-                chatId,
-                userId
-            );
-
-
-
-            // ==========================================
-// ROBO INTELLIGENCE ANALYSIS
-// ==========================================
-
-
-const intelligence =
-await analyzeMessage({
-
-    chatId,
-
-    userId,
-
-    message:cleanText
-
 });
-
-
-
-console.log(
-    "🧠 ROBO DECISION:",
-    intelligence.decision
-);
-
-
-
-
-
-// ==========================================
-// SMART SILENCE
-// ==========================================
-
-
-if(
-    !intelligence.decision.reply
-){
-
-    console.log(
-        "🤐 ROBO DECIDED SILENCE"
-    );
-
-
-    return;
-
-}
-
-
-        // ==========================================
-        // درخواست به Gemini
-        // ==========================================
-
-
-// ==========================================
-// گرفتن اطلاعات سایت
-// ==========================================
-
-const siteContext =
-await getSiteContext();
-
-
-
-// ==========================================
-// درخواست به Gemini
-// ==========================================
-const prompt = `
-
-
-${buildRoboContext(intelligence)}
-
-
-
-
-${context}
-
-
-
-
-اطلاعات سایت:
-
-${siteContext}
-
-
-
-
-پیام جدید:
-
-${cleanText}
-
-
-
-
-اکنون مثل روبو تصمیم بگیر.
-
-اگر جواب می‌دهی:
-
-- طبیعی حرف بزن.
-- کوتاه جواب بده.
-- مثل عضو گروه رفتار کن.
-- اگر مناسب بود شوخی کوچک کن.
-- اگر کاربر را می‌شناسی طبیعی اسمش را استفاده کن.
-
-
-
-`;
-
-        const answer =
-        await askGemini(
-            prompt
-        );
-
-
-
-
-
-
-        // ==========================================
-        // ذخیره حافظه
-        // ==========================================
-
-await saveMemory({
-
-    chatId,
-
-    userId,
-
-    username,
-
-    name:
-
-    userName ||
-    null,
-
-    message:
-
-    cleanText,
-
-    answer
-
-});
-
-if(userName){
-
-    await savePermanentMemory({
-
-        chatId,
-
-        userId,
-
-        name:userName,
-
-        facts:[
-            `اسم کاربر ${userName} است`
-        ]
-
-    });
-
-}
-
-
-
-
-
-
-        return send(
-
-            msg.chat.id,
-
-            answer
-
-        );
-
-
-
-
-
-    }
-    catch(error){
-
-
-
-        console.log(
-            "❌ ROBO MESSAGE ERROR:",
-            error.message
-        );
-
-
-
-    }
-
-
-
-});
-
 
 
 
@@ -1041,19 +880,30 @@ if(userName){
 
 
 bot.on(
+
 "polling_error",
+
 (error)=>{
 
 
 console.log(
+
 "POLLING ERROR:",
+
 error.message
+
 );
 
 
 }
 
 );
+
+
+
+// ======================================================
+// POLLING ERROR
+// ======================================================
 
 
 
