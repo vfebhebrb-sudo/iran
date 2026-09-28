@@ -28,6 +28,51 @@ getSiteContext
 =
 require("../services/siteBrainService");
 
+const {
+savePermanentMemory,
+getPermanentMemory
+
+}
+=
+require("../services/roboPermanentMemoryService");
+
+const {
+saveGroupMessage,
+getRecentGroupMessages
+
+}
+=
+require("../services/roboGroupMemoryService");
+
+
+
+
+const {
+
+saveGroupMessage,
+getRecentGroupMessages
+
+}
+=
+require("../services/roboGroupMemoryService1");
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 console.log(
 "🔥 TELEGRAM ROBO BOT LOADED"
 );
@@ -181,15 +226,15 @@ function extractName(text){
 
     const patterns = [
 
+    /اسم من (.+)/,
 
-        /اسم من (.+)/,
+    /منو (.+) صدا کن/,
 
-        /منو (.+) صدا کن/,
+    /اسمم (.+) هست/,
 
-        /اسمم (.+) هست/,
+    /اسمم (.+) است/,
 
-        /اسمم (.+) است/
-
+    /اسمم (.+)/
 
     ];
 
@@ -281,22 +326,31 @@ ${item.answer || ""}
         userId
     );
 
+    const permanent =
+await getPermanentMemory(userId);
 
 
-
-    return `
-
+return `
 
 تو روبو هستی.
 
 
 نام کاربر:
-${name || "نامشخص"}
+${name || permanent?.name || "نامشخص"}
+
+
+
+حافظه دائمی کاربر:
+
+${JSON.stringify(
+    permanent || {},
+    null,
+    2
+)}
 
 
 
 تاریخچه گفتگو:
-
 
 ${context}
 
@@ -412,6 +466,26 @@ msg.from.username || null;
             "📩 MESSAGE:",
             text
         );
+
+        // ذخیره همه پیام های گروه
+
+if(msg.chat.type !== "private"){
+
+
+await saveGroupMessage({
+
+    chatId,
+
+    userId,
+
+    username,
+
+    message:text
+
+});
+
+
+}
 
 
 
@@ -766,6 +840,24 @@ await saveMemory({
     answer
 
 });
+
+if(userName){
+
+    await savePermanentMemory({
+
+        chatId,
+
+        userId,
+
+        name:userName,
+
+        facts:[
+            `اسم کاربر ${userName} است`
+        ]
+
+    });
+
+}
 
 
 
