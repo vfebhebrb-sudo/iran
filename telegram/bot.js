@@ -28,42 +28,6 @@ getSiteContext
 =
 require("../services/siteBrainService");
 
-const {
-savePermanentMemory,
-getPermanentMemory
-
-}
-=
-require("../services/roboPermanentMemoryService");
-
-const {
-saveGroupMessage,
-getRecentGroupMessages
-
-}
-=
-require("../services/roboGroupMemoryService");
-
-
-
-const {
-    shouldRoboJoin,
-    markSpoken,
-    randomDelay,
-    generateSocialReply
-}
-=
-require("../services/roboSocialEngineService");
-
-
-
-
-
-
-
-
-
-
 console.log(
 "🔥 TELEGRAM ROBO BOT LOADED"
 );
@@ -217,15 +181,15 @@ function extractName(text){
 
     const patterns = [
 
-    /اسم من (.+)/,
 
-    /منو (.+) صدا کن/,
+        /اسم من (.+)/,
 
-    /اسمم (.+) هست/,
+        /منو (.+) صدا کن/,
 
-    /اسمم (.+) است/,
+        /اسمم (.+) هست/,
 
-    /اسمم (.+)/
+        /اسمم (.+) است/
+
 
     ];
 
@@ -317,31 +281,22 @@ ${item.answer || ""}
         userId
     );
 
-    const permanent =
-await getPermanentMemory(userId);
 
 
-return `
+
+    return `
+
 
 تو روبو هستی.
 
 
 نام کاربر:
-${name || permanent?.name || "نامشخص"}
-
-
-
-حافظه دائمی کاربر:
-
-${JSON.stringify(
-    permanent || {},
-    null,
-    2
-)}
+${name || "نامشخص"}
 
 
 
 تاریخچه گفتگو:
+
 
 ${context}
 
@@ -417,9 +372,9 @@ me.username
 
 
 // ادامه در بخش ۲...
+
 // ======================================================
 // MESSAGE HANDLER
-// ROBO MAIN BRAIN
 // ======================================================
 
 
@@ -428,27 +383,24 @@ bot.on(
 async(msg)=>{
 
 
-try{
+    try{
 
 
-if(!msg.text)
-return;
-
-
-
-const text =
-msg.text.trim();
+        if(!msg.text)
+            return;
 
 
 
-const chatId =
+        const text =
+        msg.text.trim();
+
+
+        const chatId =
 String(msg.chat.id);
-
 
 
 const userId =
 String(msg.from.id);
-
 
 
 const username =
@@ -456,264 +408,192 @@ msg.from.username || null;
 
 
 
-console.log(
-"📩 MESSAGE:",
-text
-);
+        console.log(
+            "📩 MESSAGE:",
+            text
+        );
+
+
+
+        // ==========================================
+        // دستورات فایل مستقل هستند
+        // ==========================================
+
+
+        if(text === "لیست فایل ها"){
+
+
+            const files =
+            getFiles();
+
+
+
+            if(files.length===0){
+
+
+                return send(
+                    msg.chat.id,
+                    "❌ فایلی وجود ندارد"
+                );
+
+
+            }
+
+
+
+            let result =
+            "📁 فایل‌ها:\n\n";
+
+
+
+            files.forEach(
+                (file,index)=>{
+
+
+                    result +=
+                    `${index+1}️⃣ ${file}\n`;
+
+
+                }
+            );
+
+
+
+            return send(
+                msg.chat.id,
+                result
+            );
+
+
+        }
 
 
 
 
-// ======================================================
-// SAVE GROUP MEMORY
-// ======================================================
+
+        // ==========================================
+        // دریافت فایل
+        // ==========================================
 
 
-if(msg.chat.type !== "private"){
+        const fileMatch =
+        text.match(
+            /دریافت\s+(\d+)/
+        );
 
 
-await saveGroupMessage({
 
-chatId,
+        if(fileMatch){
 
-userId,
 
-username,
+            const index =
+            Number(fileMatch[1])-1;
 
-message:text
 
-});
 
+            const files =
+            getFiles();
+
+
+
+            const file =
+            files[index];
+
+
+
+            if(!file){
+
+
+                return send(
+                    msg.chat.id,
+                    "❌ فایل پیدا نشد"
+                );
+
+
+            }
+
+
+
+            return bot.sendDocument(
+
+                msg.chat.id,
+
+                path.join(
+                    FILE_DIR,
+                    file
+                )
+
+            );
+
+
+        }
+
+
+
+
+
+
+
+        // ==========================================
+        // فقط وقتی روبو صدا زده شد
+        // ==========================================
+
+
+        if(!isRoboCalled(text)){
+
+
+            return;
+
+
+        }
+
+
+
+
+        const cleanText =
+        cleanMessage(text);
+
+        if(!cleanText){
+
+    return send(
+        msg.chat.id,
+        "بله؟ گوشم با توئه 👋"
+    );
 
 }
 
+        // ==========================================
+// STATIC ROBO COMMANDS
+// ==========================================
 
 
-
-// ======================================================
-// DETECT DIRECT ROBO CALL
-// ======================================================
-
-
-const directCall =
-isRoboCalled(text);
-
-
-
-
-
-
-// ======================================================
-// FILE COMMANDS
-// ======================================================
-
-
-if(text === "لیست فایل ها"){
-
-
-const files =
-getFiles();
-
-
-
-if(files.length===0){
-
-
-return send(
-
-msg.chat.id,
-
-"❌ فایلی وجود ندارد"
-
-);
-
-
-}
-
-
-
-let result =
-"📁 فایل‌ها:\n\n";
-
-
-
-files.forEach(
-(file,index)=>{
-
-
-result +=
-`${index+1}️⃣ ${file}\n`;
-
-
-});
-
-
-
-return send(
-
-msg.chat.id,
-
-result
-
-);
-
-
-
-}
-
-
-
-
-
-
-
-const fileMatch =
-text.match(
-/دریافت\s+(\d+)/
-);
-
-
-
-if(fileMatch){
-
-
-
-const index =
-Number(fileMatch[1])-1;
-
-
-
-const files =
-getFiles();
-
-
-
-const file =
-files[index];
-
-
-
-if(!file){
-
-
-return send(
-
-msg.chat.id,
-
-"❌ فایل پیدا نشد"
-
-);
-
-
-}
-
-
-
-return bot.sendDocument(
-
-msg.chat.id,
-
-path.join(
-FILE_DIR,
-file
-)
-
-);
-
-
-}
-
-
-
-
-
-
-// ======================================================
-// DIRECT ROBO MODE
-// اگر صدا زده شد همیشه جواب بده
-// ======================================================
-
-
-if(
-!directCall
-)
-return;
-
-
-
-
-const cleanText =
-cleanMessage(text);
-
-
-
-if(!cleanText){
-
-
-return send(
-
-msg.chat.id,
-
-"بله؟ گوشم با توئه 👋"
-
-);
-
-
-}
-
-
-
-
-
-
-console.log(
-"🤖 ROBO REQUEST:",
-cleanText
-);
-
-
-
-
-
-
-// ======================================================
-// STATIC COMMANDS
-// ======================================================
-
-
-const lower =
+const lowerText =
 cleanText.toLowerCase();
 
 
 
+// لینک سایت
 
 if(
-
-lower.includes("لینک سایت")
-
-||
-
-lower.includes("آدرس سایت")
-
+    lowerText.includes("لینک سایت") ||
+    lowerText.includes("آدرس سایت") ||
+    lowerText.includes("سایت رو بده")
 ){
 
 
+    return send(
 
-return send(
-
-msg.chat.id,
-
+        msg.chat.id,
 
 `🌐 لینک سایت:
-
 
 https://vfebhebrb-sudo.github.io/Riseo/
 
 
 هر وقت خواستی بگو:
-روبو لینک سایت رو بده`
+«روبو لینک سایت رو بده»`
 
-);
+    );
 
 
 }
@@ -721,86 +601,130 @@ https://vfebhebrb-sudo.github.io/Riseo/
 
 
 
-
-
-
-// ======================================================
-// THINKING
-// ======================================================
-
-
-await send(
-
-msg.chat.id,
-
-"⏳ دارم فکر می‌کنم..."
-
-);
+        console.log(
+            "🤖 ROBO REQUEST:",
+            cleanText
+        );
 
 
 
 
 
+        // ==========================================
+        // تشخیص اسم
+        // ==========================================
 
 
-
-// ======================================================
-// MEMORY CONTEXT
-// ======================================================
-
-
-const context =
-await buildContext(
-
-chatId,
-
-userId
-
-);
+        const detectedName =
+        extractName(cleanText);
 
 
 
 
+        let userName = null;
 
 
-// ======================================================
-// GEMINI
-// تصمیم اصلی دست هوش مصنوعی
-// ======================================================
+
+        if(detectedName){
 
 
+            userName =
+            detectedName;
+
+
+
+            console.log(
+                "🧠 NEW NAME:",
+                userName
+            );
+
+
+        }
+
+
+
+
+
+        // ==========================================
+        // وضعیت فکر کردن
+        // ==========================================
+
+
+        await send(
+
+            msg.chat.id,
+
+            "⏳ دارم فکر می‌کنم..."
+
+        );
+
+
+
+
+
+
+        // ==========================================
+        // گرفتن حافظه
+        // ==========================================
+
+
+            const context =
+            await buildContext(
+                chatId,
+                userId
+            );
+
+
+
+
+
+
+        // ==========================================
+        // درخواست به Gemini
+        // ==========================================
+
+
+// ==========================================
+// گرفتن اطلاعات سایت
+// ==========================================
+
+const siteContext =
+await getSiteContext();
+
+
+
+// ==========================================
+// درخواست به Gemini
+// ==========================================
 
 const prompt = `
 
-
-
-تو روبو هستی.
-
-یک عضو اجتماعی گروه.
-
-
-
-پیام کاربر:
-
-${cleanText}
-
-
-
-اطلاعات گفتگو:
 
 ${context}
 
 
 
+اطلاعات سایت:
+
+${siteContext}
+
+
+
+پیام جدید کاربر:
+
+${cleanText}
+
+
+
 قوانین:
 
-- چون کاربر مستقیم تو را صدا زده حتما جواب بده.
-- طبیعی حرف بزن.
-- کوتاه و دوستانه باش.
-- اگر مناسب بود شوخی کوچک کن.
-- اگر کاربر مشکل دارد کمک کن.
-- اگر پیشنهاد خواست چند ایده بده.
-- مثل ربات خشک جواب نده.
+- تو روبو هستی.
+- اطلاعات سایت را تحلیل کن.
+- اگر سوال درباره سایت بود از اطلاعات سایت استفاده کن.
+- اگر اطلاعاتی وجود نداشت حدس نزن.
+- دوستانه جواب بده.
+- اگر اسم کاربر را در حافظه داری استفاده کن.
+- تاریخچه گفتگو را در نظر بگیر.
 
 
 `;
@@ -808,67 +732,76 @@ ${context}
 
 
 
-
-
-const answer =
-await askGemini(prompt);
-
-
-
+        const answer =
+        await askGemini(
+            prompt
+        );
 
 
 
-// ======================================================
-// SAVE MEMORY
-// ======================================================
 
+
+
+        // ==========================================
+        // ذخیره حافظه
+        // ==========================================
 
 await saveMemory({
 
-chatId,
+    chatId,
 
-userId,
+    userId,
 
-username,
+    username,
 
-message:cleanText,
+    name:
 
-answer
+    userName ||
+    null,
+
+    message:
+
+    cleanText,
+
+    answer
+
+});
+
+
+
+
+
+
+        return send(
+
+            msg.chat.id,
+
+            answer
+
+        );
+
+
+
+
+
+    }
+    catch(error){
+
+
+
+        console.log(
+            "❌ ROBO MESSAGE ERROR:",
+            error.message
+        );
+
+
+
+    }
+
+
 
 });
 
-
-
-
-
-return send(
-
-msg.chat.id,
-
-answer
-
-);
-
-
-
-
-}
-catch(error){
-
-
-console.log(
-
-"❌ ROBO MESSAGE ERROR:",
-
-error.message
-
-);
-
-
-}
-
-
-});
 
 
 
@@ -880,30 +813,19 @@ error.message
 
 
 bot.on(
-
 "polling_error",
-
 (error)=>{
 
 
 console.log(
-
 "POLLING ERROR:",
-
 error.message
-
 );
 
 
 }
 
 );
-
-
-
-// ======================================================
-// POLLING ERROR
-// ======================================================
 
 
 
