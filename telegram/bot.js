@@ -53,9 +53,14 @@ const {
 require("../services/roboIntelligenceService");
 
 
-
-
-
+const {
+    shouldRoboJoin,
+    markSpoken,
+    randomDelay,
+    generateSocialReply
+}
+=
+require("../services/roboSocialEngineService");
 
 
 
@@ -480,6 +485,96 @@ await saveGroupMessage({
 
 }
 
+
+if(msg.chat.type !== "private"){
+
+
+const social =
+await shouldRoboJoin({
+
+    chatId,
+
+    userId,
+
+    message:text
+
+});
+
+
+
+if(
+    social.join
+){
+
+setTimeout(async()=>{
+
+
+try{
+
+
+    markSpoken(chatId);
+
+
+
+    console.log(
+        "🤖 ROBO JOINING CHAT"
+    );
+
+
+
+
+    const answer =
+    await generateSocialReply({
+
+        analysis:social.analysis,
+
+        message:text
+
+    });
+
+
+
+
+
+
+    if(answer){
+
+
+        await bot.sendMessage(
+
+            chatId,
+
+            answer
+
+        );
+
+
+    }
+
+
+
+
+}
+catch(error){
+
+
+console.log(
+"❌ SOCIAL REPLY ERROR:",
+error.message
+);
+
+
+}
+
+
+
+}, randomDelay());
+
+}
+
+
+
+}
 
 
         // ==========================================
