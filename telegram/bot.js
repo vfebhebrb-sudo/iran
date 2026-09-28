@@ -45,7 +45,12 @@ getRecentGroupMessages
 require("../services/roboGroupMemoryService");
 
 
-
+const {
+    analyzeMessage,
+    buildRoboContext
+}
+=
+require("../services/roboIntelligenceService");
 
 
 
@@ -738,7 +743,50 @@ https://vfebhebrb-sudo.github.io/Riseo/
 
 
 
+            // ==========================================
+// ROBO INTELLIGENCE ANALYSIS
+// ==========================================
 
+
+const intelligence =
+await analyzeMessage({
+
+    chatId,
+
+    userId,
+
+    message:cleanText
+
+});
+
+
+
+console.log(
+    "🧠 ROBO DECISION:",
+    intelligence.decision
+);
+
+
+
+
+
+// ==========================================
+// SMART SILENCE
+// ==========================================
+
+
+if(
+    !intelligence.decision.reply
+){
+
+    console.log(
+        "🤐 ROBO DECIDED SILENCE"
+    );
+
+
+    return;
+
+}
 
 
         // ==========================================
@@ -758,11 +806,16 @@ await getSiteContext();
 // ==========================================
 // درخواست به Gemini
 // ==========================================
-
 const prompt = `
 
 
+${buildRoboContext(intelligence)}
+
+
+
+
 ${context}
+
 
 
 
@@ -772,27 +825,27 @@ ${siteContext}
 
 
 
-پیام جدید کاربر:
+
+پیام جدید:
 
 ${cleanText}
 
 
 
-قوانین:
 
-- تو روبو هستی.
-- اطلاعات سایت را تحلیل کن.
-- اگر سوال درباره سایت بود از اطلاعات سایت استفاده کن.
-- اگر اطلاعاتی وجود نداشت حدس نزن.
-- دوستانه جواب بده.
-- اگر اسم کاربر را در حافظه داری استفاده کن.
-- تاریخچه گفتگو را در نظر بگیر.
+اکنون مثل روبو تصمیم بگیر.
+
+اگر جواب می‌دهی:
+
+- طبیعی حرف بزن.
+- کوتاه جواب بده.
+- مثل عضو گروه رفتار کن.
+- اگر مناسب بود شوخی کوچک کن.
+- اگر کاربر را می‌شناسی طبیعی اسمش را استفاده کن.
+
 
 
 `;
-
-
-
 
         const answer =
         await askGemini(
