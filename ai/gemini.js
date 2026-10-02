@@ -1,3 +1,4 @@
+
 const {
     GoogleGenerativeAI
 }
@@ -5,103 +6,65 @@ const {
 require("@google/generative-ai");
 
 
+// =================================================
+// GEMINI CLIENT
+// =================================================
 
 const genAI =
-new GoogleGenerativeAI(
-    process.env.GEMINI_API_KEY
-);
-
-
+    new GoogleGenerativeAI(
+        process.env.GEMINI_API_KEY
+    );
 
 
 // =================================================
 // GEMINI MODEL POOL
 // =================================================
-// =================================================
-// GEMINI MODEL POOL
-// =================================================
 
+const MODEL_NAMES = [
 
-const models = [
+    "gemini-3.5-flash-lite",
 
+    "gemini-2.5-flash",
 
-    {
-        name:"gemini-3.5-flash-lite",
+    "gemini-2.5-flash-lite",
 
-        model:
-        genAI.getGenerativeModel({
-            model:"gemini-3.5-flash-lite"
-        })
-    },
+    "gemini-2.0-flash",
 
+    "gemini-2.0-flash-lite",
 
+    "gemini-1.5-flash",
 
-    {
-        name:"gemini-2.0-flash",
-
-        model:
-        genAI.getGenerativeModel({
-            model:"gemini-2.0-flash"
-        })
-    },
-
-
-
-    {
-        name:"gemini-2.0-flash-lite",
-
-        model:
-        genAI.getGenerativeModel({
-            model:"gemini-2.0-flash-lite"
-        })
-    },
-
-
-
-    {
-        name:"gemini-1.5-flash",
-
-        model:
-        genAI.getGenerativeModel({
-            model:"gemini-1.5-flash"
-        })
-    },
-
-
-
-    {
-        name:"gemini-1.5-flash-8b",
-
-        model:
-        genAI.getGenerativeModel({
-            model:"gemini-1.5-flash-8b"
-        })
-    }
-
+    "gemini-1.5-flash-8b"
 
 ];
 
 
+const models =
+    MODEL_NAMES.map(
+        name => ({
 
+            name,
+
+            model:
+                genAI.getGenerativeModel({
+                    model: name
+                })
+
+        })
+    );
 
 
 // =================================================
-// SMART MODEL SELECTOR
+// TEXT AI
 // =================================================
 
+async function askGemini(text) {
 
-async function generateWithAnyModel(prompt){
-
-
-
-    for(
+    for (
         const item of models
-    ){
+    ) {
 
-
-
-        try{
-
+        try {
 
             console.log(
                 "🧠 TRY GEMINI MODEL:",
@@ -109,58 +72,48 @@ async function generateWithAnyModel(prompt){
             );
 
 
-
             const result =
-            await item.model.generateContent(
-                prompt
-            );
+                await item.model.generateContent(
+                    text
+                );
 
 
-
-            const text =
-            result.response.text();
-
+            const output =
+                result.response.text();
 
 
-            if(text){
-
+            if (
+                output &&
+                output.trim()
+            ) {
 
                 console.log(
-                    "✅ USING MODEL:",
+                    "✅ USING GEMINI MODEL:",
                     item.name
                 );
 
 
-
-                return text;
-
+                return output;
 
             }
 
-
-
         }
 
-        catch(error){
-
+        catch (error) {
 
             console.log(
-
-                "❌ MODEL FAILED:",
-                item.name,
-
-                error.message
-
+                "❌ GEMINI MODEL FAILED:",
+                item.name
             );
 
+            console.log(
+                "   ERROR:",
+                error.message
+            );
 
         }
 
-
-
     }
-
-
 
 
     console.log(
@@ -170,139 +123,110 @@ async function generateWithAnyModel(prompt){
 
     return null;
 
-
 }
-
-
-
-
-
-
-
-
-
-// =================================================
-// TEXT AI
-// =================================================
-
-
-async function askGemini(text){
-
-
-    return await generateWithAnyModel(text);
-
-
-}
-
-
-
-
-
-
-
 
 
 // =================================================
 // PDF AI
 // =================================================
 
-
 async function askGeminiPdf(
     pdfBuffer,
     prompt
-){
+) {
 
-
-    for(
+    for (
         const item of models
-    ){
+    ) {
 
-
-        try{
-
+        try {
 
             console.log(
-                "📄 TRY PDF MODEL:",
+                "📄 TRY GEMINI PDF MODEL:",
                 item.name
             );
-
 
 
             const result =
-            await item.model.generateContent([
+                await item.model.generateContent([
 
+                    {
+                        text: prompt
+                    },
 
+                    {
+                        inlineData: {
 
-                {
-                    text:prompt
-                },
+                            mimeType:
+                                "application/pdf",
 
+                            data:
+                                pdfBuffer.toString(
+                                    "base64"
+                                )
 
-
-                {
-
-                    inlineData:{
-
-
-                        mimeType:
-                        "application/pdf",
-
-
-                        data:
-                        pdfBuffer.toString("base64")
-
+                        }
 
                     }
 
-
-                }
-
+                ]);
 
 
-            ]);
+            const output =
+                result.response.text();
 
 
+            if (
+                output &&
+                output.trim()
+            ) {
 
-            return result.response.text();
+                console.log(
+                    "✅ USING GEMINI PDF MODEL:",
+                    item.name
+                );
 
 
+                return output;
+
+            }
 
         }
 
-
-        catch(error){
-
-
+        catch (error) {
 
             console.log(
-                "PDF MODEL FAILED:",
+                "❌ GEMINI PDF MODEL FAILED:",
                 item.name
             );
 
+            console.log(
+                "   ERROR:",
+                error.message
+            );
 
         }
-
-
 
     }
 
 
+    console.log(
+        "🚨 ALL GEMINI PDF MODELS FAILED"
+    );
+
 
     return null;
-
 
 }
 
 
+// =================================================
+// EXPORT
+// =================================================
 
-
-
-
-
-
-
-module.exports = askGemini;
+module.exports =
+    askGemini;
 
 
 module.exports.askGeminiPdf =
-askGeminiPdf;
+    askGeminiPdf;
