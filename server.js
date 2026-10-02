@@ -447,13 +447,184 @@ const PORT =
     process.env.PORT || 3000;
 
 
+
+// ======================================================
+// BOT START DELAY
+// ======================================================
+
+function delay(ms){
+
+    return new Promise(
+        resolve => setTimeout(resolve, ms)
+    );
+
+}
+
+
+
+// ======================================================
+// START ALL BOTS
+// ======================================================
+
+async function startBots(){
+
+
+    // =========================
+    // Rubika AI Bot
+    // =========================
+
+    await delay(5000);
+
+
+    try {
+
+        rubikaBot.startBot();
+
+        console.log(
+            "Rubika bot started ✅"
+        );
+
+    }
+    catch(error){
+
+        console.log(
+            "Rubika bot error ❌",
+            error.message
+        );
+
+    }
+
+
+
+    // =========================
+    // Riseo File Bot
+    // =========================
+
+    await delay(10000);
+
+
+    try {
+
+        startRubikaBot();
+
+        console.log(
+            "Riseo file bot started ✅"
+        );
+
+    }
+    catch(error){
+
+        console.log(
+            "Riseo bot error ❌",
+            error.message
+        );
+
+    }
+
+
+
+
+    // =========================
+    // Notification Bot
+    // =========================
+
+    await delay(10000);
+
+
+    try {
+
+        notificationBot.startBot();
+
+        console.log(
+            "Notification bot started ✅"
+        );
+
+    }
+    catch(error){
+
+        console.log(
+            "Notification bot error ❌",
+            error.message
+        );
+
+    }
+
+
+
+
+    // =========================
+    // Telegram Bot
+    // =========================
+
+    await delay(10000);
+
+
+    if(telegramBot){
+
+
+        try {
+
+            telegramBot.startBot();
+
+            console.log(
+                "Telegram bot started ✅"
+            );
+
+        }
+        catch(error){
+
+            console.log(
+                "Telegram bot error ❌",
+                error.message
+            );
+
+        }
+
+    }
+
+
+
+
+    // =========================
+    // Rubika File Channel Bot
+    // =========================
+
+    await delay(10000);
+
+
+    try {
+
+        rubikaFileChannelBot.startBot();
+
+        console.log(
+            "Rubika file channel bot started ✅"
+        );
+
+    }
+    catch(error){
+
+        console.log(
+            "Rubika file channel bot error ❌",
+            error.message
+        );
+
+    }
+
+
+}
+
+
+
+
 // ======================================================
 // START SERVER
 // ======================================================
 
-async function startServer() {
+async function startServer(){
+
 
     try {
+
 
         // ------------------------------------------
         // MongoDB
@@ -463,133 +634,62 @@ async function startServer() {
             process.env.MONGO_URI
         );
 
+
         console.log(
             "MongoDB connected ✅"
         );
 
 
-        // ------------------------------------------
-        // Rubika Bot
-        // ------------------------------------------
-
-        try {
-
-            rubikaBot.startBot();
-
-            console.log(
-                "Rubika bot started ✅"
-            );
-
-        } catch (error) {
-
-            console.log(
-                "Rubika bot error ❌",
-                error.message
-            );
-
-        }
 
 
         // ------------------------------------------
-        // Riseo Bot
-        // ------------------------------------------
-
-        try {
-
-            startRubikaBot();
-
-            console.log(
-                "Riseo file bot started ✅"
-            );
-
-        } catch (error) {
-
-            console.log(
-                "Riseo bot error ❌",
-                error.message
-            );
-
-        }
-
-
-        // ------------------------------------------
-        // Telegram Bot
-        // ------------------------------------------
-
-        if (telegramBot) {
-
-            try {
-
-                telegramBot.startBot();
-
-                console.log(
-                    "Telegram bot started ✅"
-                );
-
-            } catch (error) {
-
-                console.log(
-                    "Telegram bot error ❌",
-                    error.message
-                );
-
-            }
-
-        }
-
-
-        notificationBot.startBot();
-
-
-
-        // ------------------------------------------
-// Rubika File Channel Bot
-// ------------------------------------------
-
-try {
-
-    rubikaFileChannelBot.startBot();
-
-    console.log(
-        "Rubika file channel bot started ✅"
-    );
-
-} catch (error) {
-
-    console.log(
-        "Rubika file channel bot error ❌",
-        error.message
-    );
-
-}
-
-
-        // ------------------------------------------
-        // HTTP Server
+        // HTTP SERVER
         // ------------------------------------------
 
         app.listen(
+
             PORT,
-            () => {
+
+            ()=>{
 
                 console.log(
                     `Server running on port ${PORT} 🚀`
                 );
 
             }
+
         );
 
 
-    } catch (error) {
+
+
+
+        // ------------------------------------------
+        // START BOTS
+        // ------------------------------------------
+
+        startBots();
+
+
+
+    }
+    catch(error){
+
 
         console.error(
+
             "Startup Error ❌",
+
             error
+
         );
+
 
         process.exit(1);
 
+
     }
+
 
 }
 
