@@ -8,46 +8,12 @@ require("dotenv").config();
 // ======================================================
 // DNS
 // ======================================================
+const dns = require("dns");
 
-// const dns = require("dns");
-
-// // استفاده از DNS عمومی
-// dns.setServers([
-//     "8.8.8.8",
-//     "1.1.1.1"
-// ]);
-
-// console.log(
-//     "🌐 DNS SERVERS:",
-//     dns.getServers()
-// );
-
-
-// dns.lookup(
-//     "generativelanguage.googleapis.com",
-//     {
-//         all: true,
-//         family: 4
-//     },
-//     (error, addresses) => {
-
-//         if (error) {
-
-//             console.error(
-//                 "❌ GEMINI DNS ERROR:",
-//                 error
-//             );
-
-//             return;
-//         }
-
-//         console.log(
-//             "✅ GEMINI DNS OK:",
-//             addresses
-//         );
-
-//     }
-// );
+dns.setServers([
+    "8.8.8.8",
+    "1.1.1.1"
+]);
 // ======================================================
 // IMPORTS
 // ======================================================
