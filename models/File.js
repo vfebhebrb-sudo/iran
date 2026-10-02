@@ -213,21 +213,15 @@ const fileSchema = new mongoose.Schema({
 
 
 // آپدیت خودکار زمان تغییر
-
 fileSchema.pre(
     "save",
-    function(next){
+    function(){
 
         this.updatedAt =
-        Date.now();
-
-        next();
+        new Date();
 
     }
 );
-
-
-
 
 
 module.exports =
