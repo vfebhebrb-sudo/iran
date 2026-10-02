@@ -546,6 +546,35 @@ try {
         );
 
 
+
+
+
+        const axios = require("axios");
+
+axios.get(
+    "https://botapi.rubika.ir",
+    {
+        timeout:10000
+    }
+)
+.then(res=>{
+
+    console.log(
+        "RUBIKA TEST STATUS:",
+        res.status
+    );
+
+})
+.catch(err=>{
+
+    console.log(
+        "RUBIKA TEST ERROR:",
+        err.message
+    );
+
+});
+
+
     } catch (error) {
 
         console.error(
