@@ -76,11 +76,11 @@ router.get("/", async (req, res) => {
 
             size: file.size,
 
+            source: file.source,
+
             createdAt: file.createdAt
 
         }));
-
-
         res.json({
 
             success: true,

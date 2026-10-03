@@ -1,5 +1,10 @@
 const User = require("../models/User");
-const notificationBot = require("../rubika-notification-bot");
+
+const notificationBot =
+    require("../rubika-notification-bot");
+
+const telegramNotificationBot =
+    require("../telegram/telegramNotificationBot");
 
 // ======================================================
 // GET STATUS
@@ -97,7 +102,6 @@ exports.connect = async (req, res) => {
         chatId = String(chatId).trim();
 
 
-        // فقط عدد
 if (!/^[A-Za-z0-9_-]+$/.test(chatId)) {
 
     return res.status(400).json({
@@ -105,12 +109,11 @@ if (!/^[A-Za-z0-9_-]+$/.test(chatId)) {
         success: false,
 
         message:
-            "Chat ID روبیکا نامعتبر است."
+            "Chat ID تلگرام یا روبیکا نامعتبر است."
 
     });
 
 }
-
 
         // ----------------------------------------------
         // Find User
@@ -295,9 +298,9 @@ const incomingMessage =
         ? req.body.message.trim()
         : "";
 
-const message = incomingMessage || `🔔 تست اعلان روبیکا
+const message = incomingMessage || `🔔 تست اعلان Riseo
 
-اتصال اعلان‌های روبیکا با موفقیت انجام شد.
+اتصال اعلان‌ها با موفقیت انجام شد.
 
 Chat ID شما با موفقیت ثبت شده است.`;
 
@@ -310,12 +313,39 @@ Chat ID شما با موفقیت ثبت شده است.`;
 
         try {
 
-            const result =
-                await notificationBot.sendMessage(
-                    user.notificationChatId,
-                    message
-                );
+const chatId =
+    user.notificationChatId;
 
+const isTelegram =
+    /^\d+$/.test(chatId);
+
+let result;
+
+if (isTelegram) {
+
+    console.log(
+        "📤 Sending test notification to Telegram..."
+    );
+
+    result =
+        await telegramNotificationBot.sendMessage(
+            chatId,
+            message
+        );
+
+} else {
+
+    console.log(
+        "📤 Sending test notification to Rubika..."
+    );
+
+    result =
+        await notificationBot.sendMessage(
+            chatId,
+            message
+        );
+
+}
             /*
              * اگر sendMessage بدون خطا تمام شود،
              * یعنی API روبیکا درخواست را پذیرفته است.

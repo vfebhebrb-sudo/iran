@@ -10,6 +10,8 @@ const Counter = require("../models/Counter");
 const jwt = require("jsonwebtoken");
 const rubikaBot = require("../rubika/bot");
 
+const telegramCodeBot =
+    require("../telegram/telegramCodeBot");
 
 // ======================================================
 // ساخت شماره داوطلبی جدید
@@ -65,12 +67,8 @@ router.post("/send-otp", async (req, res) => {
         if (!phone || !chatId) {
 
             return res.status(400).json({
-
-                message:
-                    "شماره تلفن و شناسه روبیکا وارد نشده است"
-
+                message: "شماره تلفن و شناسه پیام‌رسان وارد نشده است"
             });
-
         }
 
 
@@ -144,7 +142,7 @@ router.post("/send-otp", async (req, res) => {
 
                     // هنوز حساب ساخته نشده
                     // کد داوطلبی بعد از تایید OTP ساخته می‌شود
-                    candidateNumber: null
+                    // candidateNumber: null
 
                 });
 
@@ -162,18 +160,33 @@ router.post("/send-otp", async (req, res) => {
         // ارسال OTP
         // ==================================================
 
-        await rubikaBot.sendOTP(
-            chatId,
-            otp
-        );
+            const isTelegram = /^\d+$/.test(chatId);
 
+            if (isTelegram) {
 
-        console.log(
-            "OTP SENT:",
-            phone
-        );
+                await telegramCodeBot.sendOTP(
+                    chatId,
+                    otp
+                );
 
+                console.log(
+                    "OTP SENT VIA TELEGRAM:",
+                    phone
+                );
 
+            } else {
+
+                await rubikaBot.sendOTP(
+                    chatId,
+                    otp
+                );
+
+                console.log(
+                    "OTP SENT VIA RUBIKA:",
+                    phone
+                );
+
+            }
         // ==================================================
         // پاسخ
         // ==================================================

@@ -87,6 +87,18 @@ require("./routes/telegram");
 
 const adminExamAiRoute =
     require("./routes/adminExamAi");
+
+    const telegramCodeBot =
+require("./telegram/telegramCodeBot");
+
+telegramCodeBot.startBot();
+
+const telegramFileBot =
+    require("./telegram/telegramFileBot");
+
+    const telegramFileRoutes =
+    require("./routes/telegramFileRoutes");
+
 // ======================================================
 // BOTS
 // ======================================================
@@ -117,6 +129,10 @@ try {
 
 
 const notificationBot = require("./rubika-notification-bot");
+
+// Telegram Notification
+const telegramNotificationBot =
+    require("./telegram/telegramNotificationBot");
 
 // ======================================================
 // APP
@@ -319,6 +335,12 @@ app.use(
     "/api/notifications/rubika",
     rubikaNotificationRoutes
 );
+
+app.use(
+    "/api/telegram-files",
+    telegramFileRoutes
+);
+
 // ======================================================
 // STATIC FILES
 // ======================================================
@@ -506,6 +528,49 @@ async function startServer() {
 
         notificationBot.startBot();
 
+
+        // ------------------------------------------
+// Telegram File Bot
+// ------------------------------------------
+
+try {
+
+    telegramFileBot.startBot();
+
+    console.log(
+        "Telegram File Bot started ✅"
+    );
+
+} catch (error) {
+
+    console.log(
+        "Telegram File Bot error ❌",
+        error.message
+    );
+
+}
+
+
+        // ------------------------------------------
+        // Telegram Notification Bot
+        // ------------------------------------------
+
+        try {
+
+            telegramNotificationBot.startBot();
+
+            console.log(
+                "Telegram Notification Bot started ✅"
+            );
+
+        } catch (error) {
+
+            console.log(
+                "Telegram Notification Bot error ❌",
+                error.message
+            );
+
+        }
 
 
         // ------------------------------------------
