@@ -169,7 +169,34 @@ function cleanMessage(text){
 }
 
 
+// ======================================================
+// BLOCK BINARY 0/1 MESSAGES
+// ======================================================
 
+function isBinaryMessage(text){
+
+    if(!text)
+        return false;
+
+    const value =
+        text
+        .replace(/\s+/g, "")
+        .trim();
+
+    // فقط 0 و 1 باشد
+    if(!/^[01]+$/.test(value))
+        return false;
+
+    // حداقل 8 بیت برای اینکه احتمال باینری واقعی بیشتر باشد
+    if(value.length < 8)
+        return false;
+
+    // طول‌های رایج باینری UTF-8 / ASCII
+    if(value.length % 8 !== 0)
+        return false;
+
+    return true;
+}
 
 // ======================================================
 // EXTRACT USER NAME
@@ -378,6 +405,24 @@ async(msg)=>{
 
         const text =
         msg.text.trim();
+
+        // ==========================================
+// BLOCK BINARY MESSAGES
+// ==========================================
+
+if(isBinaryMessage(text)){
+
+    console.log(
+        "🚫 BINARY MESSAGE BLOCKED:",
+        text
+    );
+
+    return send(
+        msg.chat.id,
+        "  🚫 ای کونکش گول نمی خورم 😂"
+    );
+
+}
 
 
         const chatId =
