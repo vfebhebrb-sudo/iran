@@ -172,32 +172,106 @@ function cleanMessage(text){
 // ======================================================
 // BLOCK BINARY 0/1 MESSAGES
 // ======================================================
-
 function isBinaryMessage(text){
 
-    if(!text)
+    if(!text || typeof text !== "string"){
         return false;
+    }
 
     const value =
         text
-        .replace(/\s+/g, "")
-        .trim();
+        .replace(/\s+/g, "");
 
-    // فقط 0 و 1 باشد
-    if(!/^[01]+$/.test(value))
+    if(!value){
         return false;
+    }
 
-    // حداقل 8 بیت برای اینکه احتمال باینری واقعی بیشتر باشد
-    if(value.length < 8)
+    // ------------------------------------------
+    // حالت 1: کل پیام فقط باینری باشد
+    // ------------------------------------------
+
+    if(
+        /^[01]+$/.test(value) &&
+        value.length >= 8 &&
+        value.length % 8 === 0
+    ){
+        return true;
+    }
+
+
+    // ------------------------------------------
+    // حالت 2: باینری داخل یک متن قرار گرفته باشد
+    // ------------------------------------------
+
+    const binaryChunks =
+        text.match(/[01]{8,}/g);
+
+    if(!binaryChunks){
         return false;
+    }
 
-    // طول‌های رایج باینری UTF-8 / ASCII
-    if(value.length % 8 !== 0)
-        return false;
 
-    return true;
+    for(const chunk of binaryChunks){
+
+        // حداقل 16 بیت
+        if(chunk.length < 16){
+            continue;
+        }
+
+        // اگر طولش مضرب 8 نیست،
+        // آخرین بیت‌ها ممکن است بخشی از متن باشند
+        const usableLength =
+            chunk.length -
+            (chunk.length % 8);
+
+        if(usableLength < 16){
+            continue;
+        }
+
+
+        const usableChunk =
+            chunk.slice(
+                0,
+                usableLength
+            );
+
+
+        // بررسی می‌کنیم که واقعاً از بیت‌های 0 و 1
+        // در قالب بایت‌های 8 بیتی تشکیل شده باشد
+
+        let validBytes = 0;
+
+        for(
+            let i = 0;
+            i < usableChunk.length;
+            i += 8
+        ){
+
+            const byte =
+                usableChunk.slice(
+                    i,
+                    i + 8
+                );
+
+            if(
+                /^[01]{8}$/.test(byte)
+            ){
+                validBytes++;
+            }
+
+        }
+
+
+        // حداقل 2 بایت معتبر
+        if(validBytes >= 2){
+            return true;
+        }
+
+    }
+
+
+    return false;
 }
-
 // ======================================================
 // EXTRACT USER NAME
 // ======================================================
