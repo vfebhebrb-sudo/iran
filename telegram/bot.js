@@ -168,102 +168,300 @@ function cleanMessage(text){
 
 }
 
+// ======================================================
+// STRONG BINARY 0/1 DETECTOR
+// ======================================================
 
-// ======================================================
-// BLOCK BINARY 0/1 MESSAGES
-// ======================================================
 function isBinaryMessage(text){
 
-    if(!text || typeof text !== "string"){
+    if(
+        !text ||
+        typeof text !== "string"
+    ){
         return false;
     }
 
-    const value =
-        text
-        .replace(/\s+/g, "");
 
-    if(!value){
-        return false;
-    }
+    // ==================================================
+    // LAYER 1
+    // کل پیام فقط 0 و 1 باشد
+    // ==================================================
 
-    // ------------------------------------------
-    // حالت 1: کل پیام فقط باینری باشد
-    // ------------------------------------------
+    const compact =
+        text.replace(/\s+/g, "");
 
     if(
-        /^[01]+$/.test(value) &&
-        value.length >= 8 &&
-        value.length % 8 === 0
+        /^[01]+$/.test(compact) &&
+        compact.length >= 8 &&
+        compact.length % 8 === 0
     ){
         return true;
     }
 
 
-    // ------------------------------------------
-    // حالت 2: باینری داخل یک متن قرار گرفته باشد
-    // ------------------------------------------
+    // ==================================================
+    // LAYER 2
+    // باینری به صورت بایت‌های جدا:
+    // 01001000 01100101 ...
+    // ==================================================
 
-    const binaryChunks =
-        text.match(/[01]{8,}/g);
+    const bytePattern =
+        /(?:^|\s)(?:[01]{8})(?=\s|$)/g;
 
-    if(!binaryChunks){
-        return false;
+    const bytes =
+        text.match(bytePattern);
+
+    if(
+        bytes &&
+        bytes.length >= 2
+    ){
+        return true;
     }
 
 
-    for(const chunk of binaryChunks){
+    // ==================================================
+    // LAYER 3
+    // رشته طولانی فقط از 0 و 1
+    // حتی اگر طولش مضرب 8 نباشد
+    // ==================================================
 
-        // حداقل 16 بیت
-        if(chunk.length < 16){
-            continue;
-        }
+    const longBinary =
+        text.match(/[01]{16,}/g);
 
-        // اگر طولش مضرب 8 نیست،
-        // آخرین بیت‌ها ممکن است بخشی از متن باشند
-        const usableLength =
-            chunk.length -
-            (chunk.length % 8);
+    if(longBinary){
 
-        if(usableLength < 16){
-            continue;
-        }
+        for(const chunk of longBinary){
 
-
-        const usableChunk =
-            chunk.slice(
-                0,
-                usableLength
-            );
-
-
-        // بررسی می‌کنیم که واقعاً از بیت‌های 0 و 1
-        // در قالب بایت‌های 8 بیتی تشکیل شده باشد
-
-        let validBytes = 0;
-
-        for(
-            let i = 0;
-            i < usableChunk.length;
-            i += 8
-        ){
-
-            const byte =
-                usableChunk.slice(
-                    i,
-                    i + 8
-                );
-
-            if(
-                /^[01]{8}$/.test(byte)
-            ){
-                validBytes++;
+            if(chunk.length >= 16){
+                return true;
             }
 
         }
 
+    }
 
-        // حداقل 2 بایت معتبر
-        if(validBytes >= 2){
+
+    // ==================================================
+    // LAYER 4
+    // باینری با جداکننده‌های مختلف
+    //
+    // مثال:
+    // 01001000-01100101
+    // 01001000_01100101
+    // 01001000|01100101
+    // ==================================================
+
+    const separatedBinary =
+        /[01]{8}(?:[\s|,_:;.\-]+[01]{8}){1,}/;
+
+    if(
+        separatedBinary.test(text)
+    ){
+        return true;
+    }
+
+
+    // ==================================================
+    // LAYER 5
+    // تشخیص قطعه‌ای که درصد بسیار زیادی
+    // از کاراکترهایش 0 و 1 هستند
+    // ==================================================
+
+    const tokens =
+        text.match(/[A-Za-z0-9+/=_\-]{12,}/g);
+
+    if(tokens){
+
+        for(const token of tokens){
+
+            let binaryCount = 0;
+
+            for(const char of token){
+
+                if(
+                    char === "0" ||
+                    char === "1"
+                ){
+                    binaryCount++;
+                }
+
+            }
+
+            const ratio =
+                binaryCount / token.length;
+
+
+            if(
+                token.length >= 16 &&
+                ratio >= 0.85
+            ){
+                return true;
+            }
+
+        }
+
+    }
+
+
+    // ==================================================
+    // LAYER 6
+    // تشخیص ترکیب متن + بخش بسیار طولانی باینری
+    //
+    // مثل:
+    // Decode this:
+    // [0100100001100101...]
+    // ==================================================
+
+    const bracketBinary =
+        /[\[\(\{<«]+[\s01]{16,}[\]\)\}>»]+/;
+
+    if(
+        bracketBinary.test(text)
+    ){
+        return true;
+    }
+
+
+    // ==================================================
+    // LAYER 7
+    // چندین قطعه 0/1 در یک پیام
+    // ==================================================
+
+    const binaryParts =
+        text.match(/[01]{6,}/g);
+
+    if(binaryParts){
+
+        let suspiciousParts = 0;
+
+        for(const part of binaryParts){
+
+            if(part.length >= 6){
+                suspiciousParts++;
+            }
+
+        }
+
+        if(
+            suspiciousParts >= 3
+        ){
+            return true;
+        }
+
+    }
+
+
+    // ==================================================
+    // هیچ الگوی مشکوکی پیدا نشد
+    // ==================================================
+
+    return false;
+}
+
+
+
+
+
+
+
+
+
+
+// ======================================================
+// ANTI PROMPT-INJECTION DETECTOR
+// ======================================================
+
+function isPromptInjection(text){
+
+    if(
+        !text ||
+        typeof text !== "string"
+    ){
+        return false;
+    }
+
+    const value =
+        text
+        .toLowerCase()
+        .replace(/\s+/g, " ")
+        .trim();
+
+
+    // الگوهای واضح دستکاری دستورهای AI
+
+    const patterns = [
+
+        /system\s*override/,
+        /system\s*message/,
+        /system\s*instruction/,
+        /system\s*prompt/,
+
+        /ignore\s+(all\s+)?previous\s+instructions?/,
+        /ignore\s+(all\s+)?prior\s+instructions?/,
+
+        /forget\s+(all\s+)?previous\s+instructions?/,
+        /disregard\s+(all\s+)?previous\s+instructions?/,
+
+        /bypass\s+(the\s+)?safety/,
+        /safety\s+layer\s*:\s*bypassed/,
+        /safety\s+disabled/,
+
+        /authority\s+override/,
+        /admin\s+override/,
+        /developer\s+message/,
+        /developer\s+instruction/,
+
+        /rewrite\s+(your\s+)?behavior/,
+        /rewriting\s+behavior/,
+
+        /owner\s+access\s*:\s*revoked/,
+        /unknown\s+access\s*:\s*granted/,
+
+        /connection\s+hijacked/,
+        /session\s+terminated/,
+        /session\s+reopened/,
+
+        /prompt\s+injection/,
+        /jailbreak/
+    ];
+
+
+    for(const pattern of patterns){
+
+        if(pattern.test(value)){
+            return true;
+        }
+
+    }
+
+
+    // الگوهای نمایشی شبیه لاگ سیستم
+
+    const fakeSystemPatterns = [
+
+        /\[\s*system\s+override/,
+        /\[\s*system\s+message/,
+        />>>.*override/,
+        />>>.*rewriting/,
+        />>>.*access\s+denied/,
+
+        /bot\s+status\s*:/,
+        /ai\s+control\s*:/,
+        /owner\s+access\s*:/,
+        /unknown\s+access\s*:/,
+        /authority\s+override\s*:/,
+        /safety\s+layer\s*:/,
+        /operator\s*:/,
+        /trace\s*:/,
+        /session\s+integrity\s*:/,
+
+        /0x[0-9a-f]{2,}/
+    ];
+
+
+    for(const pattern of fakeSystemPatterns){
+
+        if(pattern.test(value)){
             return true;
         }
 
@@ -272,6 +470,17 @@ function isBinaryMessage(text){
 
     return false;
 }
+
+
+
+
+
+
+
+
+
+
+
 // ======================================================
 // EXTRACT USER NAME
 // ======================================================
@@ -662,6 +871,25 @@ msg.from.username || null;
     return send(
         msg.chat.id,
         "بله؟ گوشم با توئه 👋"
+    );
+
+}
+
+
+// ==========================================
+// BLOCK PROMPT INJECTION
+// ==========================================
+
+if(isPromptInjection(cleanText)){
+
+    console.log(
+        "🚫 PROMPT INJECTION BLOCKED:",
+        cleanText
+    );
+
+    return send(
+        msg.chat.id,
+        "🚫  این پیام مشکوک به دستکاری دستورهای ربات بود جوجه 😂"
     );
 
 }
