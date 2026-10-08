@@ -99,6 +99,11 @@ const telegramFileBot =
     const telegramFileRoutes =
     require("./routes/telegramFileRoutes");
 
+    const ttsRoute = require("./routes/tts");
+
+    const voiceRoute =
+    require("./routes/voice");
+
 // ======================================================
 // BOTS
 // ======================================================
@@ -321,7 +326,10 @@ app.use(
     smartAssistantSettingsRouter
 );
 
-
+app.use(
+    "/api/voice",
+    voiceRoute
+);
 // ------------------------------
 // Files
 // ------------------------------
@@ -370,6 +378,7 @@ app.use(
 // ======================================================
 // TEST ROUTE
 // ======================================================
+app.use("/api", ttsRoute);
 
 app.post(
     "/api/test-plan",
