@@ -350,12 +350,9 @@ async (req,res)=>{
 
 
 
-
-
 // ======================================================
 // SIMPLE PDF SEARCH
-// فعلاً تستی
-// بعداً Gemini RAG
+// آماده سازی Context برای Gemini
 // ======================================================
 
 
@@ -368,62 +365,283 @@ async function searchPdf(
 ){
 
 
+    try{
 
-    const textPreview =
 
-        pdfData.text
+        const text =
 
-        ?
-
-        pdfData.text.substring(
-            0,
-            1000
-        )
-
-        :
-
-        "";
+            pdfData.text || "";
 
 
 
 
-
-    return `
-
-
-متن پیدا شده از PDF:
+        if(!text){
 
 
-
-${textPreview}
-
+            return {
 
 
-سوال کاربر:
-
-${question}
+                success:false,
 
 
+                error:
+                "PDF text is empty"
 
-تعداد صفحات PDF:
 
-${pdfData.pages}
+            };
+
+
+        }
 
 
 
-`;
 
+
+        // تمیز کردن سوال
+
+        const keywords =
+
+            question
+
+            .replace(
+                /[؟?!.,]/g,
+                ""
+            )
+
+            .split(" ")
+
+            .filter(
+
+                word =>
+
+                word.length > 2
+
+            );
+
+
+
+
+
+
+        let bestIndex = -1;
+
+        let bestScore = 0;
+
+
+
+
+
+
+        // پیدا کردن نزدیک ترین بخش متن
+
+
+        for(
+            let i = 0;
+            i < text.length;
+            i += 500
+        ){
+
+
+
+            const chunk =
+
+                text.substring(
+
+                    i,
+
+                    i + 1500
+
+                );
+
+
+
+
+            let score = 0;
+
+
+
+
+            keywords.forEach(
+
+                word => {
+
+
+                    if(
+
+                        chunk.includes(word)
+
+                    ){
+
+                        score++;
+
+                    }
+
+
+                }
+
+            );
+
+
+
+
+
+            if(score > bestScore){
+
+
+                bestScore = score;
+
+
+                bestIndex = i;
+
+
+            }
+
+
+        }
+
+
+
+
+
+
+
+
+
+        let context = "";
+
+
+
+
+
+        if(bestIndex !== -1){
+
+
+            context =
+
+                text.substring(
+
+
+                    Math.max(
+
+                        0,
+
+                        bestIndex - 500
+
+                    ),
+
+
+
+                    bestIndex + 2500
+
+
+                );
+
+
+
+        }
+
+        else{
+
+
+            context =
+
+                text.substring(
+
+                    0,
+
+                    2500
+
+                );
+
+
+        }
+
+
+
+
+
+
+
+
+        console.log(
+
+            "🔎 PDF SEARCH SCORE:",
+
+            bestScore
+
+        );
+
+
+
+
+
+
+
+        return {
+
+
+            success:true,
+
+
+            type:
+
+            "pdf_context",
+
+
+
+            question,
+
+
+
+            context,
+
+
+
+            pages:
+
+            pdfData.pages || 0
+
+
+
+        };
+
+
+
+    }
+
+    catch(error){
+
+
+
+        console.error(
+
+            "❌ SEARCH PDF ERROR:",
+
+            error
+
+        );
+
+
+
+        return {
+
+
+            success:false,
+
+
+            error:
+
+            error.message
+
+
+
+        };
+
+
+    }
 
 
 }
-
-
-
-
-
-
-
-
 
 // ======================================================
 // MANUAL REGISTER
