@@ -631,6 +631,10 @@ router.delete(
             // -----------------------------------------
             // حذف رکورد MongoDB
             // -----------------------------------------
+            console.log(
+    "📄 REQUEST PDF ID:",
+    req.params.id
+);
 
             await File.findByIdAndDelete(
                 req.params.id
