@@ -1,25 +1,8 @@
 
 "use strict";
 
-const fs = require("fs");
-const path = require("path");
-
-// ======================================================
-// CONFIG
-// ======================================================
-
 const API_BASE_URL =
     "https://iran-production-d9c4.up.railway.app";
-
-const TEMP_DIR = path.join(
-    __dirname,
-    "..",
-    "temp-files"
-);
-
-// ======================================================
-// GEMINI TOOL DEFINITIONS
-// ======================================================
 
 const tools = [
     {
@@ -27,39 +10,49 @@ const tools = [
             {
                 name: "list_files",
                 description:
-                    "فهرست PDFهای موجود در پوشه temp-files را بگیر. برای پیدا کردن نام دقیق فایل، ابتدا از این ابزار استفاده کن.",
+                    "فهرست PDFهای ثبت‌شده در سیستم فایل روبیکا و تلگرام را دریافت کن. برای یافتن فایل موردنظر کاربر از این ابزار استفاده کن.",
                 parameters: {
                     type: "OBJECT",
-                    properties: {}
+                    properties: {
+                        source: {
+                            type: "STRING",
+                            enum: ["rubika", "telegram", "all"],
+                            description:
+                                "منبع فایل؛ در صورت نامشخص بودن all"
+                        }
+                    }
                 }
             },
             {
                 name: "open_pdf",
                 description:
-                    "یک PDF را با نام دقیق از فهرست فایل‌ها انتخاب کن تا فرانت‌اند آن را بارگذاری کرده و برای سؤال‌وجواب آماده کند.",
+                    "یک PDF را با شناسه و منبع آن باز کن تا برای سؤال‌وجواب آماده شود.",
                 parameters: {
                     type: "OBJECT",
                     properties: {
-                        filename: {
+                        fileId: {
                             type: "STRING",
-                            description:
-                                "نام دقیق فایل PDF که از فهرست دریافت شده است."
+                            description: "شناسه رکورد فایل در سیستم"
+                        },
+                        source: {
+                            type: "STRING",
+                            enum: ["rubika", "telegram"],
+                            description: "منبع فایل"
                         }
                     },
-                    required: ["filename"]
+                    required: ["fileId", "source"]
                 }
             },
             {
                 name: "ask_pdf",
                 description:
-                    "از محتوای PDF بارگذاری‌شده و فعال سؤال بپرس.",
+                    "از محتوای PDF فعالی که قبلاً باز شده سؤال بپرس.",
                 parameters: {
                     type: "OBJECT",
                     properties: {
                         question: {
                             type: "STRING",
-                            description:
-                                "سؤال کاربر درباره محتوای PDF."
+                            description: "سؤال کاربر درباره PDF"
                         }
                     },
                     required: ["question"]
@@ -69,84 +62,90 @@ const tools = [
     }
 ];
 
-// ======================================================
-// LIST PDF FILES
-// ======================================================
+async function fetchJSON(url) {
+    const response = await fetch(url);
+    const data = await response.json();
 
-async function listFiles() {
-    const entries = await fs.promises.readdir(
-        TEMP_DIR,
-        { withFileTypes: true }
+    if (!response.ok || !data.success) {
+        throw new Error(
+            data.message || "دریافت اطلاعات فایل ناموفق بود."
+        );
+    }
+
+    return data;
+}
+
+async function listFiles(source = "all") {
+    const sources =
+        source === "all"
+            ? [
+                { name: "rubika", endpoint: "/api/files" },
+                { name: "telegram", endpoint: "/api/telegram-files" }
+            ]
+            : [
+                {
+                    name: source,
+                    endpoint:
+                        source === "telegram"
+                            ? "/api/telegram-files"
+                            : "/api/files"
+                }
+            ];
+
+    const results = await Promise.all(
+        sources.map(async item => {
+            const data = await fetchJSON(
+                `${API_BASE_URL}${item.endpoint}`
+            );
+
+            return data.files.map(file => ({
+                id: String(file.id),
+                name: file.name,
+                lesson: file.lesson,
+                source: item.name,
+                fileType: file.fileType,
+                size: file.size
+            }));
+        })
     );
-
-    const files = entries
-        .filter(entry =>
-            entry.isFile() &&
-            path.extname(entry.name).toLowerCase() === ".pdf"
-        )
-        .map(entry => entry.name);
 
     return {
         success: true,
-        files
+        files: results.flat()
     };
 }
 
-// ======================================================
-// FIND AND VALIDATE PDF
-// ======================================================
-
-async function openPdf(filename) {
+async function openPdf(fileId, source) {
     if (
-        typeof filename !== "string" ||
-        !filename.trim() ||
-        path.basename(filename) !== filename ||
-        path.extname(filename).toLowerCase() !== ".pdf"
+        typeof fileId !== "string" ||
+        !/^[a-f0-9]{24}$/i.test(fileId) ||
+        !["rubika", "telegram"].includes(source)
     ) {
         return {
             success: false,
-            error: "نام فایل PDF معتبر نیست."
+            error: "شناسه یا منبع فایل معتبر نیست."
         };
     }
 
-    const filePath = path.join(
-        TEMP_DIR,
-        filename
+    const endpoint =
+        source === "telegram"
+            ? "/api/telegram-files"
+            : "/api/files";
+
+    const data = await fetchJSON(
+        `${API_BASE_URL}${endpoint}/${encodeURIComponent(fileId)}/open`
     );
-
-    try {
-        const stat = await fs.promises.stat(filePath);
-
-        if (!stat.isFile()) {
-            return {
-                success: false,
-                error: "فایل موردنظر یک فایل معمولی نیست."
-            };
-        }
-    } catch (error) {
-        if (error.code === "ENOENT") {
-            return {
-                success: false,
-                error: "فایل موردنظر در پوشه temp-files پیدا نشد."
-            };
-        }
-
-        throw error;
-    }
 
     return {
         success: true,
-        filename,
-        fileUrl:
-            `${API_BASE_URL}/temp-files/${encodeURIComponent(filename)}`,
+        fileId,
+        source,
+        file: data.file,
+        fileUrl: data.url,
         message:
-            "فایل پیدا شد. فرانت‌اند باید آن را دریافت و از طریق سیستم PDF بارگذاری کند."
+            "فایل پیدا شد. اکنون باید PDF را در نشست سؤال‌وجواب بارگذاری کرد."
     };
 }
-
-// ======================================================
-// ASK QUESTION ABOUT ACTIVE PDF
-// ======================================================
 
 async function askPdf(question, sessionId) {
     if (
@@ -165,8 +164,7 @@ async function askPdf(question, sessionId) {
     ) {
         return {
             success: false,
-            error:
-                "هنوز فایل PDF فعالی بارگذاری نشده است. ابتدا یک فایل را باز کن."
+            error: "ابتدا باید یک PDF باز و بارگذاری شود."
         };
     }
 
@@ -202,33 +200,23 @@ async function askPdf(question, sessionId) {
     };
 }
 
-// ======================================================
-// EXECUTE TOOL
-// ======================================================
-
-async function executeTool(
-    name,
-    args = {},
-    context = {}
-) {
+async function executeTool(name, args = {}, context = {}) {
     try {
         switch (name) {
             case "list_files":
-                return await listFiles();
+                return await listFiles(args.source || "all");
 
             case "open_pdf":
-                return await openPdf(args.filename);
+                return await openPdf(
+                    args.fileId,
+                    args.source
+                );
 
-            case "ask_pdf": {
-                const sessionId =
-                    context.sessionId ||
-                    args.sessionId;
-
+            case "ask_pdf":
                 return await askPdf(
                     args.question,
-                    sessionId
+                    context.sessionId || args.sessionId
                 );
-            }
 
             default:
                 return {
@@ -239,26 +227,18 @@ async function executeTool(
     } catch (error) {
         console.error(
             `AI TOOL ERROR [${name}]:`,
-            error
+            error.message
         );
 
         return {
             success: false,
-            error:
-                name === "list_files"
-                    ? "دریافت فهرست فایل‌ها ناموفق بود."
-                    : "اجرای ابزار با خطا مواجه شد."
+            error: error.message
         };
     }
 }
 
-// ======================================================
-// EXPORTS
-// ======================================================
-
 module.exports = {
     API_BASE_URL,
-    TEMP_DIR,
     tools,
     executeTool,
     listFiles,
