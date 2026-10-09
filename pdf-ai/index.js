@@ -1,3 +1,6 @@
+"use strict";
+
+
 // ======================================================
 // PDF AI ENGINE
 // Downloader + Extractor + Processor
@@ -31,7 +34,9 @@ async function processPDF({
 
     fileId,
 
-    pdfUrl
+    pdfUrl,
+
+    source = "telegram"
 
 }){
 
@@ -46,15 +51,21 @@ async function processPDF({
 
 
 
+
         // ==============================
-        // 1) DOWNLOAD PDF
+        // DOWNLOAD
         // ==============================
 
 
         const pdfPath =
             await downloadPdf(
+
                 fileId,
-                pdfUrl
+
+                pdfUrl,
+
+                source
+
             );
 
 
@@ -66,43 +77,90 @@ async function processPDF({
 
 
 
+
+
         // ==============================
-        // 2) EXTRACT TEXT
+        // EXTRACT TEXT
         // ==============================
 
 
         const extracted =
             await extractText(
+
                 pdfPath
+
             );
 
 
 
+        if(
+            !extracted.success
+        ){
+
+            throw new Error(
+                extracted.error ||
+                "PDF extract failed"
+            );
+
+        }
+
+
+
+
         console.log(
+
             "📄 EXTRACT DONE:",
+
             extracted.pages,
+
             "pages"
+
         );
 
 
 
+
+
+
+
         // ==============================
-        // 3) PROCESS TEXT
+        // PROCESS TEXT
         // ==============================
 
 
         const processed =
             processText(
+
                 extracted.text
+
             );
 
 
 
+        if(
+            !processed.success
+        ){
+
+            throw new Error(
+                "Text processing failed"
+            );
+
+        }
+
+
+
+
+
         console.log(
+
             "⚙️ TEXT PROCESS DONE:",
+
             processed.chunks.length,
+
             "chunks"
+
         );
+
 
 
 
@@ -117,19 +175,19 @@ async function processPDF({
             fileId,
 
 
-            pages:
-            extracted.pages,
+            source,
 
+
+            pages:
+                extracted.pages,
 
 
             text:
-            processed.text,
-
+                processed.text,
 
 
             chunks:
-            processed.chunks
-
+                processed.chunks
 
 
         };
@@ -137,12 +195,17 @@ async function processPDF({
 
 
     }
+
+
     catch(error){
 
 
         console.error(
+
             "❌ PDF PROCESS ERROR:",
+
             error.message
+
         );
 
 
@@ -153,9 +216,17 @@ async function processPDF({
             success:false,
 
 
-            error:
-            error.message
+            fileId,
 
+
+            error:
+                error.message,
+
+
+            text:"",
+
+
+            chunks:[]
 
         };
 
@@ -169,19 +240,8 @@ async function processPDF({
 
 
 
-// ======================================================
-// EXPORTS
-// ======================================================
-
-
 module.exports = {
 
-
-    downloadPdf,
-
-    extractText,
-
-    processText,
 
     processPDF
 

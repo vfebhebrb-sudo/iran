@@ -1,87 +1,213 @@
+"use strict";
+
+
 // ======================================================
 // PDF TEXT PROCESSOR
 // آماده سازی متن PDF برای AI
 // ======================================================
 
 
-function processText(
-    text
-){
+
+// ======================================================
+// PROCESS PDF TEXT
+// ======================================================
+
+function processText(text){
+
 
     try{
 
 
         console.log(
-            "⚙️ PROCESS PDF TEXT"
+            "⚙️ PDF TEXT PROCESS START"
         );
 
 
-        if(!text){
+
+        if(
+            !text ||
+            typeof text !== "string"
+        ){
+
 
             return {
 
+
                 success:false,
+
 
                 text:"",
 
+
                 chunks:[]
 
+
             };
+
 
         }
 
 
 
-        // حذف فاصله های اضافی
+
+
+        // ==================================================
+        // CLEAN TEXT
+        // ==================================================
+
 
         let cleanText =
             text
-            .replace(/\s+/g," ")
+
+            // حذف فاصله‌های زیاد
+
+            .replace(
+                /\s+/g,
+                " "
+            )
+
+            // حذف فاصله اول و آخر
+
             .trim();
 
 
 
+
         console.log(
-            "📄 CLEAN TEXT LENGTH:",
+            "📝 CLEAN TEXT:",
             cleanText.length
         );
 
 
 
-        // تقسیم متن برای پردازش بهتر
 
-        const chunkSize = 1500;
+
+        if(!cleanText){
+
+
+            return {
+
+
+                success:false,
+
+
+                text:"",
+
+
+                chunks:[]
+
+
+            };
+
+
+        }
+
+
+
+
+
+
+        // ==================================================
+        // CHUNK SYSTEM
+        // ==================================================
+
+
+        const MAX_CHUNK_SIZE =
+            2000;
+
 
 
         const chunks = [];
 
 
 
-        for(
-            let i = 0;
-            i < cleanText.length;
-            i += chunkSize
+        let currentIndex =
+            0;
+
+
+
+        while(
+            currentIndex < cleanText.length
         ){
 
 
-            chunks.push(
 
+            let end =
+                currentIndex +
+                MAX_CHUNK_SIZE;
+
+
+
+
+            // اگر وسط جمله بود،
+            // دنبال فاصله بگرد
+
+
+            if(
+                end < cleanText.length
+            ){
+
+
+                const lastSpace =
+                    cleanText.lastIndexOf(
+                        " ",
+                        end
+                    );
+
+
+
+                if(
+                    lastSpace >
+                    currentIndex
+                ){
+
+
+                    end =
+                        lastSpace;
+
+
+                }
+
+
+            }
+
+
+
+
+
+            const chunk =
                 cleanText.substring(
-                    i,
-                    i + chunkSize
-                )
+                    currentIndex,
+                    end
+                );
 
+
+
+            chunks.push(
+                chunk.trim()
             );
+
+
+
+            currentIndex =
+                end;
+
 
 
         }
 
 
 
+
+
         console.log(
-            "🧩 TEXT CHUNKS:",
+            "🧩 TOTAL CHUNKS:",
             chunks.length
         );
+
+
+
+
 
 
 
@@ -92,7 +218,7 @@ function processText(
 
 
             text:
-            cleanText,
+                cleanText,
 
 
             chunks
@@ -102,20 +228,41 @@ function processText(
         };
 
 
+
+
     }
+
     catch(error){
 
 
         console.error(
-            "❌ PROCESS TEXT ERROR:",
+            "❌ PDF PROCESS ERROR:",
             error.message
         );
 
 
-        throw error;
+
+        return {
+
+
+            success:false,
+
+
+            text:"",
+
+
+            chunks:[],
+
+
+            error:
+                error.message
+
+
+        };
 
 
     }
+
 
 }
 
@@ -123,8 +270,11 @@ function processText(
 
 
 
+
 module.exports = {
 
+
     processText
+
 
 };

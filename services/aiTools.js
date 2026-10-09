@@ -422,10 +422,14 @@ async function readPdf(args){
 
 
 
-    if(
-        !args.fileId ||
-        !args.question
-    ){
+if(
+    !args.question
+){
+    return {
+        success:false,
+        error:"سؤال ارسال نشده"
+    };
+}{
 
 
         return {

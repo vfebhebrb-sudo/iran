@@ -1,20 +1,23 @@
+"use strict";
+
+
 // ======================================================
-// PDF EXTRACTOR
-// تبدیل PDF به متن
+// PDF TEXT EXTRACTOR
+// خواندن PDF و تبدیل به متن
 // ======================================================
 
 
 const fs = require("fs");
+const path = require("path");
+
 const pdfParse = require("pdf-parse");
 
 
 
 
-
 // ======================================================
-// EXTRACT TEXT FROM PDF
+// EXTRACT PDF TEXT
 // ======================================================
-
 
 async function extractText(pdfPath){
 
@@ -23,9 +26,23 @@ async function extractText(pdfPath){
 
 
         console.log(
-            "📖 Extracting PDF:",
+            "📖 PDF EXTRACT START:",
             pdfPath
         );
+
+
+
+        // ----------------------------------------------
+        // بررسی مسیر فایل
+        // ----------------------------------------------
+
+        if(!pdfPath){
+
+            throw new Error(
+                "PDF path is empty"
+            );
+
+        }
 
 
 
@@ -33,7 +50,7 @@ async function extractText(pdfPath){
 
 
             throw new Error(
-                "PDF file not found"
+                "PDF file not found: " + pdfPath
             );
 
 
@@ -41,40 +58,95 @@ async function extractText(pdfPath){
 
 
 
-
-        const buffer = fs.readFileSync(
-            pdfPath
-        );
-
-
-
-
-        const data = await pdfParse(
-            buffer
-        );
-
-
-
-
-        const text =
-            data.text || "";
-
+        const fileInfo =
+            fs.statSync(pdfPath);
 
 
 
         console.log(
-            "📄 TEXT LENGTH:",
+            "📦 PDF SIZE:",
+            fileInfo.size,
+            "bytes"
+        );
+
+
+
+        if(fileInfo.size === 0){
+
+
+            throw new Error(
+                "PDF file is empty"
+            );
+
+
+        }
+
+
+
+        // ----------------------------------------------
+        // خواندن فایل
+        // ----------------------------------------------
+
+        const buffer =
+            fs.readFileSync(
+                pdfPath
+            );
+
+
+
+        console.log(
+            "📄 BUFFER READY"
+        );
+
+
+
+
+
+        // ----------------------------------------------
+        // استخراج متن
+        // ----------------------------------------------
+
+        const result =
+            await pdfParse(
+                buffer
+            );
+
+
+
+        const text =
+            result.text || "";
+
+
+
+        const pages =
+            result.numpages || 0;
+
+
+
+        console.log(
+            "📚 PDF PAGES:",
+            pages
+        );
+
+
+        console.log(
+            "📝 TEXT LENGTH:",
             text.length
         );
 
 
 
 
+
+        // ----------------------------------------------
+        // PDF بدون متن
+        // ----------------------------------------------
+
         if(!text.trim()){
 
 
             console.warn(
-                "⚠️ PDF has no text"
+                "⚠️ PDF HAS NO EXTRACTABLE TEXT"
             );
 
 
@@ -83,31 +155,54 @@ async function extractText(pdfPath){
 
 
 
+
         return {
 
-            text,
 
-            pages:
-            data.numpages || 0
+            success:true,
+
+
+            text:
+                text.trim(),
+
+
+            pages
+
 
         };
 
 
 
     }
+
     catch(error){
 
 
+
         console.error(
-
-            "❌ PDF EXTRACT ERROR:",
-
+            "❌ PDF EXTRACT FAILED:",
             error.message
-
         );
 
 
-        throw error;
+
+        return {
+
+
+            success:false,
+
+
+            text:"",
+
+
+            pages:0,
+
+
+            error:
+                error.message
+
+
+        };
 
 
     }
@@ -118,8 +213,11 @@ async function extractText(pdfPath){
 
 
 
+
 module.exports = {
 
+
     extractText
+
 
 };

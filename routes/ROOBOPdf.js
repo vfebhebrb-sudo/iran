@@ -5,20 +5,18 @@ const express = require("express");
 
 const router = express.Router();
 
+
 const {
     processPDF
 } = require("../pdf-ai/pdfEngine");
 
+
 const {
     askPdfGemini
-} =
-require("../services/pdfGemini");
+} = require("../services/pdfGemini");
 
 
 
-// ======================================================
-// READ PDF
-// ======================================================
 
 
 router.post(
@@ -32,11 +30,8 @@ async(req,res)=>{
         const {
 
             fileId,
-
-            source,
-
+            source="telegram",
             question
-
 
         } = req.body;
 
@@ -48,18 +43,14 @@ async(req,res)=>{
             !question
         ){
 
-
             return res.status(400).json({
-
 
                 success:false,
 
                 error:
                 "fileId و question لازم است"
 
-
             });
-
 
         }
 
@@ -68,80 +59,58 @@ async(req,res)=>{
 
         const API =
 
-        process.env.SERVER_URL ||
+        process.env.API_URL ||
 
-        "https://iran-production-d9c4.up.railway.app";
-
-
-
-
-
-        let pdfUrl;
+        "https://iran-go4q.onrender.com";
 
 
 
 
 
-        if(source==="telegram"){
+        const pdfUrl =
 
+        source==="telegram"
 
-            pdfUrl =
+        ?
 
-            `${API}/api/telegram-files/${fileId}/pdf`;
+        `${API}/api/telegram-files/${fileId}/pdf`
 
+        :
 
-        }
+        `${API}/api/files/${fileId}/pdf`;
 
-        else{
-
-
-            pdfUrl =
-
-            `${API}/api/files/${fileId}/pdf`;
-
-
-        }
 
 
 
 
 
         console.log(
-            "📚 PDF AI REQUEST"
+            "📚 READ PDF START"
         );
 
 
         console.log(
-            "FILE:",
-            fileId
+            {
+                fileId,
+                source,
+                pdfUrl
+            }
         );
 
 
-        console.log(
-            "URL:",
-            pdfUrl
-        );
 
 
-
-
-
-
-
-        // ===============================
-        // پردازش PDF
-        // ===============================
 
 
         const pdf =
 
         await processPDF({
 
-
             fileId,
 
-            pdfUrl
+            pdfUrl,
 
+            source
 
         });
 
@@ -150,20 +119,14 @@ async(req,res)=>{
 
 
 
-        if(!pdf.success){
+        if(
+            !pdf.success
+        ){
 
-
-            return res.status(500).json({
-
-
-                success:false,
-
-                error:
-                pdf.error
-
-
-            });
-
+            throw new Error(
+                pdf.error ||
+                "PDF processing failed"
+            );
 
         }
 
@@ -171,28 +134,28 @@ async(req,res)=>{
 
 
 
-        // فعلاً تست استخراج متن
+        const answer =
 
-const answer =
+        await askPdfGemini(
 
-await askPdfGemini(
+            pdf.text,
 
-    pdf.text,
+            question
 
-    question
-
-);
+        );
 
 
 
-return res.json({
 
-    success:true,
 
-    reply:answer
 
-});
+        return res.json({
 
+            success:true,
+
+            reply:answer
+
+        });
 
 
 
@@ -207,19 +170,17 @@ return res.json({
 
             "❌ READ PDF ERROR:",
 
-            error
+            error.message
 
         );
 
 
 
-        res.status(500).json({
-
+        return res.status(500).json({
 
             success:false,
 
             error:error.message
-
 
         });
 
@@ -227,9 +188,7 @@ return res.json({
     }
 
 
-
 });
-
 
 
 
