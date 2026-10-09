@@ -1,3 +1,5 @@
+
+
 "use strict";
 
 
@@ -6,17 +8,129 @@ const express = require("express");
 const router = express.Router();
 
 
-const {
-    processPDF
-} = require("../pdf-ai/pdfEngine");
-
 
 const {
-    askPdfGemini
-} = require("../services/pdfGemini");
+
+    uploadPdfToGemini,
+
+    askGeminiFile
+
+} = require("../services/geminiFileService");
 
 
 
+const axios = require("axios");
+
+const fs = require("fs");
+
+const path = require("path");
+
+
+
+
+// =============================================
+// TEMP DIRECTORY
+// =============================================
+
+
+const TEMP_DIR = path.join(
+    __dirname,
+    "../temp-files"
+);
+
+
+
+
+
+// =============================================
+// GET PDF FILE
+// =============================================
+
+
+async function downloadPdf(url,fileId){
+
+
+    const filePath = path.join(
+
+        TEMP_DIR,
+
+        fileId + ".pdf"
+
+    );
+
+
+
+    if(
+        fs.existsSync(filePath)
+    ){
+
+        return filePath;
+
+    }
+
+
+
+
+    const response = await axios({
+
+        method:"GET",
+
+        url,
+
+        responseType:"stream",
+
+        timeout:60000
+
+    });
+
+
+
+
+
+    const writer =
+    fs.createWriteStream(
+        filePath
+    );
+
+
+
+    response.data.pipe(writer);
+
+
+
+
+    return new Promise(
+        (resolve,reject)=>{
+
+
+            writer.on(
+                "finish",
+                ()=>resolve(filePath)
+            );
+
+
+            writer.on(
+                "error",
+                reject
+            );
+
+
+        }
+    );
+
+
+
+}
+
+
+
+
+
+
+
+// =============================================
+// READ PDF WITH GEMINI FILE API
+// =============================================
 
 
 router.post(
@@ -24,171 +138,233 @@ router.post(
 async(req,res)=>{
 
 
-    try{
+try{
 
 
-        const {
+const {
 
-            fileId,
-            source="telegram",
-            question
 
-        } = req.body;
+    fileId,
 
+    source="telegram",
 
+    question
 
 
-        if(
-            !fileId ||
-            !question
-        ){
+}=req.body;
 
-            return res.status(400).json({
 
-                success:false,
 
-                error:
-                "fileId و question لازم است"
 
-            });
+if(
+    !fileId ||
+    !question
+){
 
-        }
 
+return res.status(400).json({
 
+    success:false,
 
+    error:
+    "fileId و question لازم است"
 
-        const API =
+});
 
-        process.env.API_URL ||
 
-        "https://iran-go4q.onrender.com";
+}
 
 
 
 
 
-        const pdfUrl =
 
-        source==="telegram"
 
-        ?
+const API =
 
-        `${API}/api/telegram-files/${fileId}/pdf`
+process.env.API_URL ||
 
-        :
+"https://iran-go4q.up.railway.app";
 
-        `${API}/api/files/${fileId}/pdf`;
 
 
 
 
 
 
-        console.log(
-            "📚 READ PDF START"
-        );
+const pdfUrl =
 
+source==="telegram"
 
-        console.log(
-            {
-                fileId,
-                source,
-                pdfUrl
-            }
-        );
+?
 
+`${API}/api/telegram-files/${fileId}/pdf`
 
+:
 
+`${API}/api/files/${fileId}/pdf`;
 
 
 
-        const pdf =
 
-        await processPDF({
 
-            fileId,
 
-            pdfUrl,
 
-            source
+console.log(
+    "📚 GEMINI PDF READ START"
+);
 
-        });
 
+console.log({
 
+    fileId,
 
+    source,
 
+    pdfUrl
 
+});
 
-        if(
-            !pdf.success
-        ){
 
-            throw new Error(
-                pdf.error ||
-                "PDF processing failed"
-            );
 
-        }
 
 
 
 
+// =====================================
+// 1) DOWNLOAD TEMP PDF
+// =====================================
 
-        const answer =
 
-        await askPdfGemini(
+const pdfPath =
 
-            pdf.text,
+await downloadPdf(
 
-            question
+    pdfUrl,
 
-        );
+    fileId
 
+);
 
 
 
 
+console.log(
 
-        return res.json({
+"📥 PDF DOWNLOADED:",
 
-            success:true,
+pdfPath
 
-            reply:answer
+);
 
-        });
 
 
 
 
 
-    }
 
-    catch(error){
 
+// =====================================
+// 2) UPLOAD TO GEMINI FILE API
+// =====================================
 
-        console.error(
 
-            "❌ READ PDF ERROR:",
+const uploaded =
 
-            error.message
+await uploadPdfToGemini(
 
-        );
+    pdfPath
 
+);
 
 
-        return res.status(500).json({
 
-            success:false,
 
-            error:error.message
+console.log(
 
-        });
+"✅ GEMINI FILE:",
 
+uploaded.fileName
 
-    }
+);
+
+
+
+
+
+
+
+
+// =====================================
+// 3) ASK GEMINI DIRECTLY
+// =====================================
+
+
+const answer =
+
+await askGeminiFile(
+
+    uploaded.fileName,
+
+    question
+
+);
+
+
+
+
+
+
+
+
+return res.json({
+
+    success:true,
+
+    reply:answer,
+
+    file:
+    uploaded.fileName
+
+});
+
+
+
+
+
+
+}
+catch(error){
+
+
+console.error(
+
+"❌ GEMINI PDF READ ERROR:",
+
+error
+
+);
+
+
+
+return res.status(500).json({
+
+    success:false,
+
+    error:error.message
+
+});
+
+
+
+}
 
 
 });
+
+
+
+
 
 
 
