@@ -3,40 +3,34 @@
 
 // ======================================================
 // PDF ENGINE
-// Downloader + Extractor + Processor
+// Gemini File API Bridge
 // ======================================================
 
 
 const {
-    downloadPdf
-} = require("./downloader");
 
+    uploadPdfToGemini,
 
-const {
-    extractText
-} = require("./extractor");
+    askGeminiFile
 
-
-const {
-    processText
-} = require("./processor");
+} = require("../services/geminiFileService");
 
 
 
 
 
 // ======================================================
-// PROCESS COMPLETE PDF
+// PROCESS PDF WITH GEMINI
 // ======================================================
 
 
 async function processPDF({
 
-    fileId,
 
-    pdfUrl,
+    filePath,
 
-    source = "telegram"
+    question
+
 
 }){
 
@@ -45,112 +39,85 @@ async function processPDF({
 
 
         console.log(
-            "🚀 PDF ENGINE START:",
-            fileId
+            "🚀 GEMINI PDF ENGINE START"
         );
-
-
-
-
-
-        // ==================================================
-        // 1 - DOWNLOAD
-        // ==================================================
-
-
-        const pdfPath =
-            await downloadPdf({
-
-                fileId,
-
-                pdfUrl,
-
-                source
-
-            });
-
-
-
-        console.log(
-            "📥 PDF DOWNLOADED:",
-            pdfPath
-        );
-
-
-
-
-
-        // ==================================================
-        // 2 - EXTRACT TEXT
-        // ==================================================
-
-
-        const extracted =
-            await extractText(
-                pdfPath
-            );
 
 
 
         if(
-            !extracted.success
+            !filePath
         ){
 
-
             throw new Error(
-                extracted.error ||
-                "PDF extract failed"
+                "PDF file path missing"
             );
-
-
-        }
-
-
-
-        console.log(
-            "📄 PDF TEXT READY:",
-            extracted.pages,
-            "pages"
-        );
-
-
-
-
-
-
-        // ==================================================
-        // 3 - PROCESS TEXT
-        // ==================================================
-
-
-        const processed =
-            processText(
-                extracted.text
-            );
-
-
-
-        if(
-            !processed.success
-        ){
-
-
-            throw new Error(
-                "PDF text processing failed"
-            );
-
 
         }
 
 
 
 
+        // ==================================================
+        // 1 - UPLOAD FILE TO GEMINI
+        // ==================================================
+
+
+        const uploaded =
+
+            await uploadPdfToGemini(
+                filePath
+            );
+
+
+
+        if(
+            !uploaded.success
+        ){
+
+            throw new Error(
+                uploaded.error ||
+                "Gemini upload failed"
+            );
+
+        }
+
+
 
 
         console.log(
-            "🧠 PDF READY:",
-            processed.chunks.length,
-            "chunks"
+
+            "📤 GEMINI FILE:",
+            uploaded.fileName
+
+        );
+
+
+
+
+
+        // ==================================================
+        // 2 - ASK GEMINI ABOUT FILE
+        // ==================================================
+
+
+        const answer =
+
+            await askGeminiFile(
+
+                uploaded.fileName,
+
+                question
+
+            );
+
+
+
+
+
+        console.log(
+
+            "🧠 GEMINI PDF ANSWER READY"
+
         );
 
 
@@ -164,22 +131,12 @@ async function processPDF({
             success:true,
 
 
-            fileId,
+            fileName:
+                uploaded.fileName,
 
 
-            source,
-
-
-            pages:
-                extracted.pages,
-
-
-            text:
-                processed.text,
-
-
-            chunks:
-                processed.chunks
+            reply:
+                answer
 
 
 
@@ -188,14 +145,19 @@ async function processPDF({
 
 
 
+
     }
+
 
     catch(error){
 
 
+
         console.error(
-            "❌ PDF ENGINE ERROR:",
+
+            "❌ GEMINI PDF ENGINE ERROR:",
             error.message
+
         );
 
 
@@ -206,9 +168,6 @@ async function processPDF({
             success:false,
 
 
-            fileId,
-
-
             error:
                 error.message
 
@@ -217,13 +176,12 @@ async function processPDF({
         };
 
 
+
     }
 
 
+
 }
-
-
-
 
 
 

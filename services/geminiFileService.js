@@ -3,8 +3,7 @@
 
 // ======================================================
 // GEMINI FILE SERVICE
-// Upload PDF -> Gemini Files API
-// مدیریت فایل PDF خارج از سرور خودمان
+// PDF -> Gemini File API
 // ======================================================
 
 
@@ -13,10 +12,7 @@ const {
 } = require("@google/genai");
 
 
-
 const fs = require("fs");
-
-
 
 
 
@@ -30,23 +26,27 @@ const ai = new GoogleGenAI({
 
 
 
+// حافظه موقت فایل‌های Gemini
+
+const geminiFiles = {};
+
+
+
+
 
 // ======================================================
-// UPLOAD PDF TO GEMINI
+// UPLOAD PDF
 // ======================================================
 
 
-async function uploadPdfToGemini(
+async function uploadPdfToGemini(filePath){
 
-    filePath
-
-){
 
     try{
 
 
         console.log(
-            "📤 Upload PDF to Gemini:",
+            "📤 UPLOAD PDF:",
             filePath
         );
 
@@ -57,23 +57,18 @@ async function uploadPdfToGemini(
         ){
 
             throw new Error(
-                "PDF file not found"
+                "PDF not found"
             );
 
         }
 
 
 
-
-
-        const uploadResult =
+        const uploaded =
 
         await ai.files.upload({
 
-            file:
-
-            filePath,
-
+            file:filePath,
 
             config:{
 
@@ -86,40 +81,39 @@ async function uploadPdfToGemini(
 
 
 
-
-
         if(
-            !uploadResult.name
+            !uploaded.name
         ){
 
             throw new Error(
-                "Gemini file upload failed"
+                "Gemini upload failed"
             );
 
         }
 
 
 
-
-
         console.log(
-            "✅ GEMINI FILE CREATED:",
-            uploadResult.name
+
+            "✅ GEMINI FILE:",
+            uploaded.name
+
         );
-
-
 
 
 
         return {
 
+
             success:true,
 
+
             fileName:
-            uploadResult.name
+            uploaded.name
+
+
 
         };
-
 
 
     }
@@ -129,8 +123,7 @@ async function uploadPdfToGemini(
 
         console.error(
 
-            "❌ GEMINI FILE UPLOAD ERROR:",
-
+            "UPLOAD ERROR:",
             error.message
 
         );
@@ -147,36 +140,51 @@ async function uploadPdfToGemini(
 
 
 
+
 // ======================================================
-// ASK QUESTION FROM GEMINI PDF FILE
+// ASK GEMINI FILE
 // ======================================================
 
+
 async function askGeminiFile(
+
     fileName,
+
     question
+
 ){
+
 
     try{
 
+
         console.log(
-            "📚 ASK GEMINI FILE:",
+
+            "🧠 ASK FILE:",
             fileName
+
         );
 
 
-        const result =
+
+
+        const response =
 
         await ai.models.generateContent({
 
             model:
+
             "gemini-2.0-flash",
+
 
 
             contents:[
 
+
                 {
 
                     role:"user",
+
 
                     parts:[
 
@@ -184,138 +192,11 @@ async function askGeminiFile(
                         {
 
                             fileData:{
+
 
                                 fileUri:
                                 fileName,
 
-                                mimeType:
-                                "application/pdf"
-
-                            }
-
-                        },
-
-
-                        {
-
-                            text:
-
-`
-تو یک دستیار مطالعه هستی.
-
-بر اساس فایل PDF پاسخ بده.
-
-اگر جواب داخل فایل نبود بگو پیدا نشد.
-
-
-سوال کاربر:
-
-${question}
-
-`
-
-                        }
-
-
-                    ]
-
-                }
-
-            ]
-
-        });
-
-
-
-        return {
-
-            success:true,
-
-            answer:
-            result.text
-
-        };
-
-
-    }
-
-    catch(error){
-
-
-        console.error(
-
-            "❌ GEMINI FILE QUESTION ERROR:",
-
-            error.message
-
-        );
-
-
-        throw error;
-
-    }
-
-}
-
-
-
-
-// ======================================================
-// ASK QUESTION FROM PDF
-// ======================================================
-
-
-async function askGeminiPdf(
-
-    geminiFile,
-
-    question
-
-){
-
-    try{
-
-
-        console.log(
-
-            "📚 ASK GEMINI PDF:",
-
-            geminiFile
-
-        );
-
-
-
-
-
-        const result =
-
-        await ai.models.generateContent({
-
-            model:
-
-            "gemini-2.0-flash",
-
-
-
-            contents:[
-
-
-                {
-
-                    role:"user",
-
-                    parts:[
-
-
-                        {
-
-                            fileData:{
-
-
-                                fileUri:
-                                geminiFile,
-
 
                                 mimeType:
                                 "application/pdf"
@@ -328,18 +209,19 @@ async function askGeminiPdf(
 
                         {
 
-
                             text:
 
 `
-تو یک دستیار مطالعه هستی.
+تو یک دستیار مطالعه فارسی هستی.
 
-بر اساس فایل PDF پاسخ بده.
+قوانین:
 
-اگر جواب داخل فایل نبود بگو پیدا نشد.
+- فقط بر اساس PDF جواب بده.
+- اگر جواب داخل فایل نبود بگو پیدا نشد.
+- پاسخ کوتاه و دقیق بده.
 
 
-سوال:
+سؤال:
 
 ${question}
 
@@ -362,14 +244,15 @@ ${question}
 
 
 
-
         return {
+
 
             success:true,
 
-            answer:
 
-            result.text
+            answer:
+            response.text
+
 
 
         };
@@ -383,8 +266,7 @@ ${question}
 
         console.error(
 
-            "❌ GEMINI PDF QUESTION ERROR:",
-
+            "ASK GEMINI ERROR:",
             error.message
 
         );
@@ -402,10 +284,13 @@ ${question}
 
 
 
-module.exports = {
+module.exports={
+
 
     uploadPdfToGemini,
 
+
     askGeminiFile
+
 
 };

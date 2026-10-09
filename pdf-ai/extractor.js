@@ -3,213 +3,46 @@
 
 // ======================================================
 // PDF TEXT EXTRACTOR
-// خواندن PDF و تبدیل به متن
+// Deprecated
+// PDF processing moved to Gemini File API
 // ======================================================
 
 
-const fs = require("fs");
-const path = require("path");
-
-const pdfParse = require("pdf-parse");
-
-
-
-
-// ======================================================
-// EXTRACT PDF TEXT
-// ======================================================
 
 async function extractText(pdfPath){
 
 
-    try{
+    console.warn(
+        "⚠️ extractText called but PDF extraction is disabled."
+    );
 
 
-        console.log(
-            "📖 PDF EXTRACT START:",
-            pdfPath
-        );
+    console.warn(
+        "⚠️ Use Gemini File API instead."
+    );
 
 
 
-        // ----------------------------------------------
-        // بررسی مسیر فایل
-        // ----------------------------------------------
+    return {
 
-        if(!pdfPath){
 
-            throw new Error(
-                "PDF path is empty"
-            );
+        success:false,
 
-        }
 
+        text:"",
 
 
-        if(!fs.existsSync(pdfPath)){
+        pages:0,
 
 
-            throw new Error(
-                "PDF file not found: " + pdfPath
-            );
+        error:
+        "Local PDF extraction disabled. Use Gemini File API."
 
 
-        }
-
-
-
-        const fileInfo =
-            fs.statSync(pdfPath);
-
-
-
-        console.log(
-            "📦 PDF SIZE:",
-            fileInfo.size,
-            "bytes"
-        );
-
-
-
-        if(fileInfo.size === 0){
-
-
-            throw new Error(
-                "PDF file is empty"
-            );
-
-
-        }
-
-
-
-        // ----------------------------------------------
-        // خواندن فایل
-        // ----------------------------------------------
-
-        const buffer =
-            fs.readFileSync(
-                pdfPath
-            );
-
-
-
-        console.log(
-            "📄 BUFFER READY"
-        );
-
-
-
-
-
-        // ----------------------------------------------
-        // استخراج متن
-        // ----------------------------------------------
-
-        const result =
-            await pdfParse(
-                buffer
-            );
-
-
-
-        const text =
-            result.text || "";
-
-
-
-        const pages =
-            result.numpages || 0;
-
-
-
-        console.log(
-            "📚 PDF PAGES:",
-            pages
-        );
-
-
-        console.log(
-            "📝 TEXT LENGTH:",
-            text.length
-        );
-
-
-
-
-
-        // ----------------------------------------------
-        // PDF بدون متن
-        // ----------------------------------------------
-
-        if(!text.trim()){
-
-
-            console.warn(
-                "⚠️ PDF HAS NO EXTRACTABLE TEXT"
-            );
-
-
-        }
-
-
-
-
-
-        return {
-
-
-            success:true,
-
-
-            text:
-                text.trim(),
-
-
-            pages
-
-
-        };
-
-
-
-    }
-
-    catch(error){
-
-
-
-        console.error(
-            "❌ PDF EXTRACT FAILED:",
-            error.message
-        );
-
-
-
-        return {
-
-
-            success:false,
-
-
-            text:"",
-
-
-            pages:0,
-
-
-            error:
-                error.message
-
-
-        };
-
-
-    }
+    };
 
 
 }
-
 
 
 

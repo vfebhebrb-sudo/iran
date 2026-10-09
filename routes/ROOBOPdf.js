@@ -1,12 +1,9 @@
-
-
 "use strict";
 
 
 const express = require("express");
 
 const router = express.Router();
-
 
 
 const {
@@ -18,7 +15,6 @@ const {
 } = require("../services/geminiFileService");
 
 
-
 const axios = require("axios");
 
 const fs = require("fs");
@@ -28,9 +24,18 @@ const path = require("path");
 
 
 
-// =============================================
+// =====================================================
+// GEMINI PDF SESSION CACHE
+// =====================================================
+
+const pdfSessions = {};
+
+
+
+
+// =====================================================
 // TEMP DIRECTORY
-// =============================================
+// =====================================================
 
 
 const TEMP_DIR = path.join(
@@ -40,14 +45,35 @@ const TEMP_DIR = path.join(
 
 
 
+if(!fs.existsSync(TEMP_DIR)){
 
 
-// =============================================
-// GET PDF FILE
-// =============================================
+    fs.mkdirSync(
+        TEMP_DIR,
+        {
+            recursive:true
+        }
+    );
 
 
-async function downloadPdf(url,fileId){
+}
+
+
+
+
+
+// =====================================================
+// DOWNLOAD PDF
+// =====================================================
+
+
+async function downloadPdf(
+
+    url,
+
+    fileId
+
+){
 
 
     const filePath = path.join(
@@ -60,9 +86,14 @@ async function downloadPdf(url,fileId){
 
 
 
+
     if(
         fs.existsSync(filePath)
     ){
+
+        console.log(
+            "📂 USING CACHED PDF"
+        );
 
         return filePath;
 
@@ -71,13 +102,23 @@ async function downloadPdf(url,fileId){
 
 
 
-    const response = await axios({
+    console.log(
+        "⬇️ DOWNLOADING PDF:",
+        url
+    );
+
+
+
+
+    const response =
+
+    await axios({
 
         method:"GET",
 
         url,
 
-        responseType:"stream",
+        responseType:"arraybuffer",
 
         timeout:60000
 
@@ -87,37 +128,59 @@ async function downloadPdf(url,fileId){
 
 
 
-    const writer =
-    fs.createWriteStream(
+    const buffer =
+
+    Buffer.from(
+        response.data
+    );
+
+
+
+
+
+    // بررسی واقعی PDF
+
+    const header =
+
+    buffer
+    .slice(0,4)
+    .toString();
+
+
+
+    if(
+        header !== "%PDF"
+    ){
+
+        throw new Error(
+            "Downloaded file is not PDF"
+        );
+
+    }
+
+
+
+
+
+    fs.writeFileSync(
+
+        filePath,
+
+        buffer
+
+    );
+
+
+
+
+    console.log(
+        "✅ PDF SAVED:",
         filePath
     );
 
 
 
-    response.data.pipe(writer);
-
-
-
-
-    return new Promise(
-        (resolve,reject)=>{
-
-
-            writer.on(
-                "finish",
-                ()=>resolve(filePath)
-            );
-
-
-            writer.on(
-                "error",
-                reject
-            );
-
-
-        }
-    );
-
+    return filePath;
 
 
 }
@@ -128,13 +191,14 @@ async function downloadPdf(url,fileId){
 
 
 
-// =============================================
-// READ PDF WITH GEMINI FILE API
-// =============================================
+// =====================================================
+// OPEN PDF
+// دانلود + آپلود Gemini فقط یک بار
+// =====================================================
 
 
 router.post(
-"/read",
+"/open",
 async(req,res)=>{
 
 
@@ -146,9 +210,7 @@ const {
 
     fileId,
 
-    source="telegram",
-
-    question
+    source="telegram"
 
 
 }=req.body;
@@ -156,18 +218,49 @@ const {
 
 
 
-if(
-    !fileId ||
-    !question
-){
+
+if(!fileId){
 
 
 return res.status(400).json({
 
     success:false,
 
-    error:
-    "fileId و question لازم است"
+    error:"fileId لازم است"
+
+});
+
+
+}
+
+
+
+
+
+
+const sessionKey =
+
+`${source}_${fileId}`;
+
+
+
+
+
+// اگر قبلا باز شده
+
+if(
+    pdfSessions[sessionKey]
+){
+
+
+return res.json({
+
+    success:true,
+
+    fileName:
+    pdfSessions[sessionKey],
+
+    cached:true
 
 });
 
@@ -191,16 +284,20 @@ process.env.API_URL ||
 
 
 
-
 const pdfUrl =
+
 
 source==="telegram"
 
+
 ?
+
 
 `${API}/api/telegram-files/${fileId}/pdf`
 
+
 :
+
 
 `${API}/api/files/${fileId}/pdf`;
 
@@ -211,29 +308,18 @@ source==="telegram"
 
 
 console.log(
-    "📚 GEMINI PDF READ START"
+    "📂 OPEN PDF:",
+    {
+        fileId,
+        source,
+        pdfUrl
+    }
 );
 
 
-console.log({
-
-    fileId,
-
-    source,
-
-    pdfUrl
-
-});
 
 
 
-
-
-
-
-// =====================================
-// 1) DOWNLOAD TEMP PDF
-// =====================================
 
 
 const pdfPath =
@@ -249,24 +335,8 @@ await downloadPdf(
 
 
 
-console.log(
-
-"📥 PDF DOWNLOADED:",
-
-pdfPath
-
-);
 
 
-
-
-
-
-
-
-// =====================================
-// 2) UPLOAD TO GEMINI FILE API
-// =====================================
 
 
 const uploaded =
@@ -280,33 +350,24 @@ await uploadPdfToGemini(
 
 
 
+
+
+
+pdfSessions[sessionKey] =
+
+uploaded.fileName;
+
+
+
+
+
+
+
 console.log(
 
-"✅ GEMINI FILE:",
+"✅ GEMINI SESSION CREATED:",
 
-uploaded.fileName
-
-);
-
-
-
-
-
-
-
-
-// =====================================
-// 3) ASK GEMINI DIRECTLY
-// =====================================
-
-
-const answer =
-
-await askGeminiFile(
-
-    uploaded.fileName,
-
-    question
+pdfSessions[sessionKey]
 
 );
 
@@ -321,13 +382,10 @@ return res.json({
 
     success:true,
 
-    reply:answer,
-
-    file:
+    fileName:
     uploaded.fileName
 
 });
-
 
 
 
@@ -337,11 +395,12 @@ return res.json({
 catch(error){
 
 
+
 console.error(
 
-"❌ GEMINI PDF READ ERROR:",
+"❌ OPEN PDF ERROR:",
 
-error
+error.message
 
 );
 
@@ -362,6 +421,195 @@ return res.status(500).json({
 
 });
 
+
+
+
+
+
+
+
+
+// =====================================================
+// READ PDF
+// فقط سوال بفرست به Gemini
+// =====================================================
+
+
+router.post(
+"/read",
+async(req,res)=>{
+
+
+try{
+
+
+const {
+
+
+fileId,
+
+source="telegram",
+
+question
+
+
+}=req.body;
+
+
+
+
+
+
+if(
+    !fileId ||
+    !question
+){
+
+
+return res.status(400).json({
+
+success:false,
+
+error:
+"fileId و question لازم است"
+
+});
+
+
+}
+
+
+
+
+
+
+
+const sessionKey =
+
+`${source}_${fileId}`;
+
+
+
+
+
+
+
+const geminiFile =
+
+pdfSessions[sessionKey];
+
+
+
+
+
+
+
+if(!geminiFile){
+
+
+return res.status(400).json({
+
+success:false,
+
+error:
+"PDF باز نشده است. ابتدا open_pdf اجرا شود."
+
+});
+
+
+}
+
+
+
+
+
+
+
+console.log(
+
+"🧠 ASK GEMINI PDF:",
+
+{
+
+fileId,
+
+geminiFile,
+
+question
+
+}
+
+);
+
+
+
+
+
+
+
+
+const answer =
+
+await askGeminiFile(
+
+    geminiFile,
+
+    question
+
+);
+
+
+
+
+
+
+
+return res.json({
+
+success:true,
+
+reply:
+
+answer.answer || answer
+
+});
+
+
+
+
+
+
+
+}
+catch(error){
+
+
+
+console.error(
+
+"❌ READ PDF ERROR:",
+
+error.message
+
+);
+
+
+
+
+return res.status(500).json({
+
+success:false,
+
+error:error.message
+
+});
+
+
+
+}
+
+
+});
 
 
 

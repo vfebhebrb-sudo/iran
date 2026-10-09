@@ -1,6 +1,12 @@
 "use strict";
 
 
+// ======================================================
+// AI TOOLS BRIDGE
+// Gemini Live -> External PDF AI
+// ======================================================
+
+
 const API_BASE_URL =
     "https://iran-production-d9c4.up.railway.app";
 
@@ -8,167 +14,168 @@ const API_BASE_URL =
 
 
 // ======================================================
-// GEMINI TOOLS
+// GEMINI TOOL DEFINITIONS
 // ======================================================
 
 
 const tools = [
 
-    {
+{
+functionDeclarations:[
 
-        functionDeclarations:[
 
+{
 
-            {
+name:"list_files",
 
-                name:"list_files",
+description:
+"لیست فایل‌های PDF موجود در سیستم را دریافت کن.",
 
-                description:
-                "لیست فایل‌های PDF موجود در روبیکا و تلگرام را دریافت کن.",
 
+parameters:{
 
-                parameters:{
+type:"OBJECT",
 
-                    type:"OBJECT",
+properties:{
 
-                    properties:{
+source:{
 
-                        source:{
+type:"STRING",
 
-                            type:"STRING",
+enum:[
+"rubika",
+"telegram",
+"all"
+]
 
-                            enum:[
-                                "rubika",
-                                "telegram",
-                                "all"
-                            ]
+}
 
-                        }
+}
 
-                    }
+}
 
-                }
+},
 
-            },
 
 
 
+{
 
-            {
+name:"open_pdf",
 
-                name:"open_pdf",
+description:
+"یک فایل PDF را برای کاربر باز کن.",
 
-                description:
-                "یک فایل PDF را باز و آماده پردازش کن.",
 
+parameters:{
 
-                parameters:{
+type:"OBJECT",
 
-                    type:"OBJECT",
+properties:{
 
-                    properties:{
 
+fileId:{
 
-                        fileId:{
+type:"STRING"
 
-                            type:"STRING"
+},
 
-                        },
 
+source:{
 
-                        source:{
+type:"STRING",
 
-                            type:"STRING",
+enum:[
+"rubika",
+"telegram"
+]
 
-                            enum:[
-                                "rubika",
-                                "telegram"
-                            ]
+}
 
-                        }
 
-                    },
+},
 
 
-                    required:[
-                        "fileId",
-                        "source"
-                    ]
+required:[
+"fileId",
+"source"
+]
 
-                }
 
-            },
+}
 
+},
 
 
 
 
 
-            {
 
-                name:"read_pdf",
+{
 
-                description:
-                "یک PDF را دانلود می‌کند و با استفاده از موتور هوش مصنوعی آن را می‌خواند و به سؤال کاربر پاسخ می‌دهد.",
+name:"read_pdf",
 
+description:
+"یک فایل PDF را با Gemini File API بخوان و به سوال کاربر پاسخ بده.",
 
-                parameters:{
 
-                    type:"OBJECT",
+parameters:{
 
-                    properties:{
+type:"OBJECT",
 
+properties:{
 
-                        fileId:{
 
-                            type:"STRING",
+fileId:{
 
-                            description:
-                            "شناسه فایل PDF"
+type:"STRING"
 
-                        },
+},
 
 
-                        source:{
+source:{
 
-                            type:"STRING",
+type:"STRING",
 
-                            enum:[
-                                "rubika",
-                                "telegram"
-                            ]
+enum:[
+"rubika",
+"telegram"
+]
 
-                        },
+},
 
 
-                        question:{
+question:{
 
-                            type:"STRING",
+type:"STRING"
 
-                            description:
-                            "سؤال کاربر درباره فایل"
+}
 
-                        }
 
+},
 
-                    },
 
+required:[
 
-                    required:[
-                        "fileId",
-                        "source",
-                        "question"
-                    ]
+"fileId",
 
-                }
+"source",
 
-            }
+"question"
 
+]
 
 
-        ]
+}
 
-    }
+
+}
+
+
+
+]
+
+}
 
 ];
 
@@ -178,38 +185,61 @@ const tools = [
 
 
 
+
+
 // ======================================================
-// FETCH JSON
+// FETCH HELPER
 // ======================================================
 
 
-async function fetchJSON(url){
+async function apiRequest(
+
+url,
+
+options={}
+
+){
 
 
-    const response =
-        await fetch(url);
+const response =
 
+await fetch(
 
+API_BASE_URL + url,
 
-    const data =
-        await response.json();
+options
 
-
-
-    if(!response.ok || !data.success){
-
-        throw new Error(
-
-            data.message ||
-            "API ERROR"
-
-        );
-
-    }
+);
 
 
 
-    return data;
+const data =
+
+await response.json();
+
+
+
+if(
+
+!response.ok
+
+){
+
+
+throw new Error(
+
+data.error ||
+
+"API ERROR"
+
+);
+
+
+}
+
+
+
+return data;
 
 
 }
@@ -227,106 +257,106 @@ async function fetchJSON(url){
 // ======================================================
 
 
-async function listFiles(source="all"){
+async function listFiles(
 
+source="all"
 
-    let urls=[];
-
-
-
-    if(
-        source==="all" ||
-        source==="rubika"
-    ){
-
-        urls.push({
-
-            source:"rubika",
-
-            url:
-            "/api/files"
-
-        });
-
-    }
+){
 
 
 
-    if(
-        source==="all" ||
-        source==="telegram"
-    ){
-
-        urls.push({
-
-            source:"telegram",
-
-            url:
-            "/api/telegram-files"
-
-        });
-
-    }
+let result=[];
 
 
 
 
-    let files=[];
+if(
+
+source==="all" ||
+
+source==="rubika"
+
+){
+
+
+const rubika =
+
+await apiRequest(
+
+"/api/files"
+
+);
 
 
 
-    for(
-        const item of urls
-    ){
+result.push(
+
+...(rubika.files || []).map(file=>({
+
+id:String(file.id),
+
+name:file.name,
+
+source:"rubika"
+
+}))
+
+);
 
 
-        const data =
-        await fetchJSON(
-
-            API_BASE_URL +
-            item.url
-
-        );
-
-
-
-        files.push(
-
-            ...data.files.map(file=>({
-
-
-                id:String(file.id),
-
-                name:file.name,
-
-                lesson:file.lesson,
-
-                source:item.source,
-
-                size:file.size,
-
-                fileType:file.fileType
-
-
-            }))
-
-        );
-
-
-    }
+}
 
 
 
 
-    return {
+
+if(
+
+source==="all" ||
+
+source==="telegram"
+
+){
 
 
-        success:true,
+const telegram =
 
-        files
+await apiRequest(
+
+"/api/telegram-files"
+
+);
 
 
-    };
+
+result.push(
+
+...(telegram.files || []).map(file=>({
+
+id:String(file.id),
+
+name:file.name,
+
+source:"telegram"
+
+}))
+
+);
+
+
+}
+
+
+
+
+
+return {
+
+success:true,
+
+files:result
+
+};
 
 
 }
@@ -346,61 +376,59 @@ async function listFiles(source="all"){
 
 async function openPdf(
 
-    fileId,
-
-    source
+args
 
 ){
 
 
-    const endpoint =
 
-        source==="telegram"
+const endpoint =
 
-        ?
+args.source==="telegram"
 
-        "/api/telegram-files"
+?
 
-        :
+"/api/telegram-files/"
 
-        "/api/files";
+:
 
-
-
-
-    const data =
-    await fetchJSON(
-
-        API_BASE_URL +
-
-        endpoint +
-
-        "/" +
-
-        fileId +
-
-        "/open"
-
-    );
+"/api/files/";
 
 
 
 
-    return {
+
+const data =
+
+await apiRequest(
+
+endpoint +
+
+args.fileId +
+
+"/open"
+
+);
 
 
-        success:true,
-
-        fileId,
-
-        source,
-
-        url:data.url,
-
-        file:data.file
 
 
-    };
+return {
+
+
+success:true,
+
+
+fileId:args.fileId,
+
+
+source:args.source,
+
+
+url:data.url || data.file
+
+
+};
 
 
 }
@@ -414,112 +442,113 @@ async function openPdf(
 
 
 // ======================================================
-// READ PDF WITH AI
+// READ PDF
+// Gemini File API
 // ======================================================
 
 
-async function readPdf(args){
+async function readPdf(
+
+args
+
+){
 
 
 
 if(
-    !args.question
+
+!args.fileId ||
+
+!args.question
+
 ){
-    return {
-        success:false,
-        error:"سؤال ارسال نشده"
-    };
-}{
 
 
-        return {
+return {
+
+success:false,
+
+error:
+"fileId و question لازم است"
+
+};
 
 
-            success:false,
-
-
-            error:
-            "fileId و question لازم است"
-
-
-        };
-
-
-    }
-
-
-
-
-    console.log(
-
-        "📚 AI READ PDF:",
-
-        args.fileId
-
-    );
+}
 
 
 
 
 
-    const response =
 
-    await fetch(
+console.log(
 
-        API_BASE_URL +
+"📚 GEMINI FILE READ:",
 
-        "/api/ai/pdf/read",
+args.fileId
 
-        {
-
-
-            method:"POST",
-
-
-            headers:{
-
-
-                "Content-Type":
-                "application/json"
-
-
-            },
-
-
-            body:JSON.stringify({
-
-
-                fileId:
-                args.fileId,
-
-
-                source:
-                args.source,
-
-
-                question:
-                args.question
-
-
-
-            })
-
-
-        }
-
-    );
+);
 
 
 
 
 
-    const data =
-    await response.json();
+
+
+const response =
+
+await apiRequest(
+
+"/api/pdf-ai/read",
+
+{
+
+
+method:"POST",
+
+
+headers:{
+
+
+"Content-Type":
+
+"application/json"
+
+
+},
+
+
+body:
+
+JSON.stringify({
+
+fileId:
+
+args.fileId,
+
+
+source:
+
+args.source,
+
+
+question:
+
+args.question
+
+})
+
+
+}
+
+);
 
 
 
 
-    return data;
+
+
+return response;
 
 
 }
@@ -539,121 +568,121 @@ if(
 
 async function executeTool(
 
-    name,
+name,
 
-    args={},
+args={},
 
-    context={}
+context={}
 
 ){
 
 
 
-    console.log(
+console.log(
 
-        "🛠 TOOL EXECUTE:",
+"🛠 TOOL:",
 
-        name,
+name,
 
-        args
+args
 
-    );
+);
 
 
 
 
-    try{
+try{
 
 
-        switch(name){
 
+switch(name){
 
 
-            case "list_files":
 
-                return await listFiles(
+case "list_files":
 
-                    args.source || "all"
 
-                );
+return await listFiles(
 
+args.source || "all"
 
+);
 
 
 
-            case "open_pdf":
 
-                return await openPdf(
 
-                    args.fileId,
+case "open_pdf":
 
-                    args.source
 
-                );
+return await openPdf(
 
+args
 
+);
 
 
 
-            case "read_pdf":
 
-                return await readPdf(
 
-                    args
+case "read_pdf":
 
-                );
 
+return await readPdf(
 
+args
 
+);
 
 
-            default:
 
 
-                return {
 
+default:
 
-                    success:false,
 
-                    error:
-                    "Tool not found"
+return {
 
+success:false,
 
-                };
+error:
+"Unknown tool"
 
+};
 
 
-        }
 
+}
 
-    }
 
-    catch(error){
 
+}
 
+catch(error){
 
-        console.error(
 
-            "AI TOOL ERROR:",
 
-            error.message
+console.error(
 
-        );
+"❌ TOOL ERROR:",
 
+error.message
 
+);
 
-        return {
 
 
-            success:false,
+return {
 
-            error:error.message
+success:false,
 
+error:error.message
 
-        };
+};
 
 
-    }
+
+}
 
 
 }
@@ -668,22 +697,19 @@ async function executeTool(
 module.exports={
 
 
-    API_BASE_URL,
+tools,
 
 
-    tools,
+executeTool,
 
 
-    executeTool,
+listFiles,
 
 
-    listFiles,
+openPdf,
 
 
-    openPdf,
-
-
-    readPdf
+readPdf
 
 
 };
