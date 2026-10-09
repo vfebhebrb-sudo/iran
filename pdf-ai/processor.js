@@ -1,61 +1,105 @@
 // ======================================================
-// PDF PROCESSOR
+// PDF TEXT PROCESSOR
 // آماده سازی متن PDF برای AI
 // ======================================================
 
 
-
-// ======================================================
-// CLEAN TEXT
-// ======================================================
-
-
-function cleanText(text=""){
-
+function processText(
+    text
+){
 
     try{
 
 
-        let cleaned = text;
+        console.log(
+            "⚙️ PROCESS PDF TEXT"
+        );
+
+
+        if(!text){
+
+            return {
+
+                success:false,
+
+                text:"",
+
+                chunks:[]
+
+            };
+
+        }
 
 
 
         // حذف فاصله های اضافی
 
-        cleaned =
-            cleaned.replace(
-                /[ \t]+/g,
-                " "
-            );
-
-
-
-        // حذف خط خالی زیاد
-
-        cleaned =
-            cleaned.replace(
-                /\n\s*\n\s*\n+/g,
-                "\n\n"
-            );
-
-
-
-        // حذف فاصله اول و آخر
-
-        cleaned =
-            cleaned.trim();
+        let cleanText =
+            text
+            .replace(/\s+/g," ")
+            .trim();
 
 
 
         console.log(
-            "🧹 CLEAN TEXT LENGTH:",
-            cleaned.length
+            "📄 CLEAN TEXT LENGTH:",
+            cleanText.length
         );
 
 
 
-        return cleaned;
+        // تقسیم متن برای پردازش بهتر
 
+        const chunkSize = 1500;
+
+
+        const chunks = [];
+
+
+
+        for(
+            let i = 0;
+            i < cleanText.length;
+            i += chunkSize
+        ){
+
+
+            chunks.push(
+
+                cleanText.substring(
+                    i,
+                    i + chunkSize
+                )
+
+            );
+
+
+        }
+
+
+
+        console.log(
+            "🧩 TEXT CHUNKS:",
+            chunks.length
+        );
+
+
+
+        return {
+
+
+            success:true,
+
+
+            text:
+            cleanText,
+
+
+            chunks
+
+
+
+        };
 
 
     }
@@ -63,119 +107,15 @@ function cleanText(text=""){
 
 
         console.error(
-            "❌ CLEAN TEXT ERROR:",
+            "❌ PROCESS TEXT ERROR:",
             error.message
         );
 
 
-        return text;
+        throw error;
 
 
     }
-
-
-}
-
-
-
-
-
-
-// ======================================================
-// SPLIT TEXT
-// تقسیم متن برای Gemini
-// ======================================================
-
-
-function splitText(
-
-    text,
-
-    size=4000
-
-){
-
-
-    const chunks = [];
-
-
-
-    let start = 0;
-
-
-
-    while(
-        start < text.length
-    ){
-
-
-        chunks.push(
-
-            text.substring(
-                start,
-                start + size
-            )
-
-        );
-
-
-        start += size;
-
-
-    }
-
-
-
-    console.log(
-
-        "📦 TEXT CHUNKS:",
-
-        chunks.length
-
-    );
-
-
-
-    return chunks;
-
-
-}
-
-
-
-
-
-
-// ======================================================
-// PROCESS PDF TEXT
-// ======================================================
-
-
-function processText(text){
-
-
-
-    const cleaned =
-        cleanText(text);
-
-
-
-    const chunks =
-        splitText(cleaned);
-
-
-
-    return {
-
-
-        text: cleaned,
-
-
-        chunks
-
-
-    };
-
 
 }
 
@@ -185,14 +125,6 @@ function processText(text){
 
 module.exports = {
 
-
-    cleanText,
-
-
-    splitText,
-
-
     processText
-
 
 };

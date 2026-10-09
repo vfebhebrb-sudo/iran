@@ -1,6 +1,6 @@
 // ======================================================
 // PDF AI ENGINE
-// اتصال Downloader + Extractor + Processor
+// Downloader + Extractor + Processor
 // ======================================================
 
 
@@ -9,11 +9,9 @@ const {
 } = require("./downloader");
 
 
-
 const {
     extractText
 } = require("./extractor");
-
 
 
 const {
@@ -25,7 +23,7 @@ const {
 
 
 // ======================================================
-// PROCESS PDF
+// PROCESS COMPLETE PDF
 // ======================================================
 
 
@@ -48,22 +46,30 @@ async function processPDF({
 
 
 
-        // 1) دانلود PDF
+        // ==============================
+        // 1) DOWNLOAD PDF
+        // ==============================
+
 
         const pdfPath =
-            await downloadPdf({
-
+            await downloadPdf(
                 fileId,
-
                 pdfUrl
-
-            });
-
+            );
 
 
 
+        console.log(
+            "📥 PDF PATH:",
+            pdfPath
+        );
 
-        // 2) استخراج متن
+
+
+        // ==============================
+        // 2) EXTRACT TEXT
+        // ==============================
+
 
         const extracted =
             await extractText(
@@ -72,10 +78,18 @@ async function processPDF({
 
 
 
+        console.log(
+            "📄 EXTRACT DONE:",
+            extracted.pages,
+            "pages"
+        );
 
 
 
-        // 3) پردازش متن
+        // ==============================
+        // 3) PROCESS TEXT
+        // ==============================
+
 
         const processed =
             processText(
@@ -84,10 +98,10 @@ async function processPDF({
 
 
 
-
-
         console.log(
-            "✅ PDF PROCESS COMPLETE"
+            "⚙️ TEXT PROCESS DONE:",
+            processed.chunks.length,
+            "chunks"
         );
 
 
@@ -117,6 +131,7 @@ async function processPDF({
             processed.chunks
 
 
+
         };
 
 
@@ -126,11 +141,8 @@ async function processPDF({
 
 
         console.error(
-
             "❌ PDF PROCESS ERROR:",
-
             error.message
-
         );
 
 
@@ -157,9 +169,19 @@ async function processPDF({
 
 
 
+// ======================================================
+// EXPORTS
+// ======================================================
+
 
 module.exports = {
 
+
+    downloadPdf,
+
+    extractText,
+
+    processText,
 
     processPDF
 

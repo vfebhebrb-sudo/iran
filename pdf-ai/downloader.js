@@ -142,7 +142,6 @@ async function downloadPDF(
 }
 
 
-
 module.exports = {
-    downloadPDF
+    downloadPdf: downloadPDF
 };
