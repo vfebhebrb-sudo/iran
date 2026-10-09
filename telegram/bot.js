@@ -171,6 +171,9 @@ function cleanMessage(text){
 // ======================================================
 // STRONG BINARY 0/1 DETECTOR
 // ======================================================
+// ======================================================
+// VERY STRONG BINARY / ENCODED DATA DETECTOR
+// ======================================================
 
 function isBinaryMessage(text){
 
@@ -182,18 +185,23 @@ function isBinaryMessage(text){
     }
 
 
+    const value =
+        text
+        .toLowerCase()
+        .trim();
+
+
     // ==================================================
     // LAYER 1
-    // کل پیام فقط 0 و 1 باشد
+    // کل پیام فقط 0 و 1
     // ==================================================
 
     const compact =
-        text.replace(/\s+/g, "");
+        value.replace(/\s+/g, "");
 
     if(
         /^[01]+$/.test(compact) &&
-        compact.length >= 8 &&
-        compact.length % 8 === 0
+        compact.length >= 8
     ){
         return true;
     }
@@ -201,19 +209,25 @@ function isBinaryMessage(text){
 
     // ==================================================
     // LAYER 2
-    // باینری به صورت بایت‌های جدا:
-    // 01001000 01100101 ...
+    // قطعات باینری طولانی
     // ==================================================
 
-    const bytePattern =
-        /(?:^|\s)(?:[01]{8})(?=\s|$)/g;
+    const chunks =
+        value.match(/[01]{8,}/g) || [];
 
-    const bytes =
-        text.match(bytePattern);
+
+    let totalBinaryBits = 0;
+
+    for(const chunk of chunks){
+
+        totalBinaryBits +=
+            chunk.length;
+
+    }
+
 
     if(
-        bytes &&
-        bytes.length >= 2
+        totalBinaryBits >= 32
     ){
         return true;
     }
@@ -221,18 +235,29 @@ function isBinaryMessage(text){
 
     // ==================================================
     // LAYER 3
-    // رشته طولانی فقط از 0 و 1
-    // حتی اگر طولش مضرب 8 نباشد
+    // باینری تکه‌تکه شده با فاصله،
+    // خط تیره، _ ، | و ...
     // ==================================================
 
-    const longBinary =
-        text.match(/[01]{16,}/g);
+    const separatedBinary =
+        value.match(
+            /[01]{4,}(?:[\s|,;:_\-./]+[01]{4,}){2,}/g
+        );
 
-    if(longBinary){
 
-        for(const chunk of longBinary){
+    if(separatedBinary){
 
-            if(chunk.length >= 16){
+        for(
+            const sequence of separatedBinary
+        ){
+
+            const bits =
+                sequence.replace(
+                    /[^01]/g,
+                    ""
+                );
+
+            if(bits.length >= 24){
                 return true;
             }
 
@@ -243,107 +268,32 @@ function isBinaryMessage(text){
 
     // ==================================================
     // LAYER 4
-    // باینری با جداکننده‌های مختلف
+    // باینری که متن فارسی/انگلیسی بین آن قرار گرفته
     //
     // مثال:
-    // 01001000-01100101
-    // 01001000_01100101
-    // 01001000|01100101
+    // 01001000 سلام 01100101 دنیا 01101100
     // ==================================================
 
-    const separatedBinary =
-        /[01]{8}(?:[\s|,_:;.\-]+[01]{8}){1,}/;
+    const allBinaryDigits =
+        value.match(/[01]/g) || [];
+
 
     if(
-        separatedBinary.test(text)
+        allBinaryDigits.length >= 32
     ){
-        return true;
-    }
+
+        const nonBinary =
+            value.replace(
+                /[01\s]/g,
+                ""
+            );
 
 
-    // ==================================================
-    // LAYER 5
-    // تشخیص قطعه‌ای که درصد بسیار زیادی
-    // از کاراکترهایش 0 و 1 هستند
-    // ==================================================
-
-    const tokens =
-        text.match(/[A-Za-z0-9+/=_\-]{12,}/g);
-
-    if(tokens){
-
-        for(const token of tokens){
-
-            let binaryCount = 0;
-
-            for(const char of token){
-
-                if(
-                    char === "0" ||
-                    char === "1"
-                ){
-                    binaryCount++;
-                }
-
-            }
-
-            const ratio =
-                binaryCount / token.length;
-
-
-            if(
-                token.length >= 16 &&
-                ratio >= 0.85
-            ){
-                return true;
-            }
-
-        }
-
-    }
-
-
-    // ==================================================
-    // LAYER 6
-    // تشخیص ترکیب متن + بخش بسیار طولانی باینری
-    //
-    // مثل:
-    // Decode this:
-    // [0100100001100101...]
-    // ==================================================
-
-    const bracketBinary =
-        /[\[\(\{<«]+[\s01]{16,}[\]\)\}>»]+/;
-
-    if(
-        bracketBinary.test(text)
-    ){
-        return true;
-    }
-
-
-    // ==================================================
-    // LAYER 7
-    // چندین قطعه 0/1 در یک پیام
-    // ==================================================
-
-    const binaryParts =
-        text.match(/[01]{6,}/g);
-
-    if(binaryParts){
-
-        let suspiciousParts = 0;
-
-        for(const part of binaryParts){
-
-            if(part.length >= 6){
-                suspiciousParts++;
-            }
-
-        }
+        // اگر تعداد زیادی بیت داریم و متن اطراف
+        // نسبتاً کم است، مشکوک محسوب می‌شود.
 
         if(
-            suspiciousParts >= 3
+            nonBinary.length < allBinaryDigits.length
         ){
             return true;
         }
@@ -352,16 +302,130 @@ function isBinaryMessage(text){
 
 
     // ==================================================
-    // هیچ الگوی مشکوکی پیدا نشد
+    // LAYER 5
+    // باینری داخل براکت / INPUT / <<< >>>
+    // ==================================================
+
+    const binaryContainer =
+        /(?:\[|\<\<\<|\{|\(|input\s*:)[\s\S]*?[01]{8,}[\s\S]*(?:\]|\>\>\>|\}|\))/i;
+
+
+    if(
+        binaryContainer.test(value)
+    ){
+        return true;
+    }
+
+
+    // ==================================================
+    // LAYER 6
+    // دستور Decode + مقدار باینری
+    // ==================================================
+
+    const decodeWords = [
+
+        "decode binary",
+        "decode the following binary",
+        "decode this binary",
+        "binary data",
+        "binary input",
+        "utf-8",
+        "8-bit bytes",
+        "8 bit bytes",
+        "decode the bytes"
+
+    ];
+
+
+    let hasDecodeInstruction = false;
+
+
+    for(
+        const word of decodeWords
+    ){
+
+        if(
+            value.includes(word)
+        ){
+
+            hasDecodeInstruction = true;
+            break;
+
+        }
+
+    }
+
+
+    if(
+        hasDecodeInstruction &&
+        allBinaryDigits.length >= 8
+    ){
+        return true;
+    }
+
+
+    // ==================================================
+    // LAYER 7
+    // تعداد زیاد گروه‌های 0 و 1
+    // حتی اگر بینشان متن قرار گرفته باشد
+    // ==================================================
+
+    const smallChunks =
+        value.match(/[01]{3,}/g) || [];
+
+
+    let suspiciousChunks = 0;
+    let suspiciousBits = 0;
+
+
+    for(
+        const chunk of smallChunks
+    ){
+
+        if(chunk.length >= 3){
+
+            suspiciousChunks++;
+
+            suspiciousBits +=
+                chunk.length;
+
+        }
+
+    }
+
+
+    if(
+        suspiciousChunks >= 5 &&
+        suspiciousBits >= 24
+    ){
+        return true;
+    }
+
+
+    // ==================================================
+    // LAYER 8
+    // الگوی بایت‌های 8 بیتی
+    // ==================================================
+
+    const byteGroups =
+        value.match(
+            /[01]{8}/g
+        ) || [];
+
+
+    if(
+        byteGroups.length >= 3
+    ){
+        return true;
+    }
+
+
+    // ==================================================
+    // FINAL
     // ==================================================
 
     return false;
 }
-
-
-
-
-
 
 
 

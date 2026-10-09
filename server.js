@@ -138,7 +138,9 @@ const notificationBot = require("./rubika-notification-bot");
 // Telegram Notification
 const telegramNotificationBot =
     require("./telegram/telegramNotificationBot");
-
+// PDF AI
+const aiPdfRoutes =
+    require("./routes/aiPdf");
 // ======================================================
 // APP
 // ======================================================
@@ -235,6 +237,10 @@ app.use(
     aiRoutes
 );
 
+app.use(
+    "/api/ai",
+    aiPdfRoutes
+);
 
 // ------------------------------
 // Chat
