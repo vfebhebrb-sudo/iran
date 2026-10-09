@@ -141,6 +141,11 @@ const telegramNotificationBot =
 // PDF AI
 const aiPdfRoutes =
     require("./routes/aiPdf");
+
+
+    const pdfAIRouter = require("./routes/pdfAI");
+
+
 // ======================================================
 // APP
 // ======================================================
@@ -212,7 +217,10 @@ app.use(
     aiAdminRoute
 );
 
-
+app.use(
+    "/api/pdf-ai",
+    pdfAIRouter
+);
 // ------------------------------
 // Plans
 // ------------------------------
