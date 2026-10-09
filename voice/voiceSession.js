@@ -1,20 +1,31 @@
 "use strict";
 
-const { GoogleGenAI } = require("@google/genai");
+
+const { GoogleGenAI } =
+    require("@google/genai");
+
 
 const EyeService =
     require("../services/eyeService");
+
 
 const AITools =
     require("../services/aiTools");
 
 
-const ai = new GoogleGenAI({
 
-    apiKey:
-        process.env.GEMINI_API_KEY
 
-});
+const ai =
+    new GoogleGenAI({
+
+        apiKey:
+            process.env.GEMINI_API_KEY
+
+    });
+
+
+
+
 
 
 
@@ -22,9 +33,11 @@ const ai = new GoogleGenAI({
 // CREATE GEMINI LIVE VOICE TOKEN
 // ======================================================
 
-async function createVoiceToken() {
 
-    try {
+async function createVoiceToken(){
+
+
+    try{
 
 
         const now =
@@ -32,53 +45,65 @@ async function createVoiceToken() {
 
 
 
-        // --------------------------------------------------
-        // Token lifetime
-        // --------------------------------------------------
+
+        // زمان اعتبار توکن
 
         const expireTime =
             new Date(
-                now + 30 * 60 * 1000
+
+                now +
+                30 * 60 * 1000
+
             ).toISOString();
 
 
 
-        // --------------------------------------------------
-        // Session start window
-        // --------------------------------------------------
+
+        // زمان شروع سشن
 
         const newSessionExpireTime =
             new Date(
-                now + 60 * 1000
+
+                now +
+                60 * 1000
+
             ).toISOString();
 
 
 
-        // --------------------------------------------------
-        // Create ephemeral token
-        // --------------------------------------------------
+
+
 
         const token =
             await ai.authTokens.create({
 
-                config: {
 
 
-                    uses: 1,
+                config:{
+
+
+
+                    uses:1,
+
 
 
                     expireTime,
+
 
 
                     newSessionExpireTime,
 
 
 
-                    // ======================================
-                    // GEMINI LIVE CONFIG
-                    // ======================================
 
-                    bidiGenerateContentSetup: {
+
+                    // ==================================
+                    // GEMINI LIVE
+                    // ==================================
+
+
+                    bidiGenerateContentSetup:{
+
 
 
                         model:
@@ -86,112 +111,190 @@ async function createVoiceToken() {
 
 
 
-                        responseModalities: [
+
+                        responseModalities:[
+
 
                             "AUDIO"
 
+
                         ],
 
 
 
+
+
                         // ==================================
-                        // AVAILABLE TOOLS
+                        // TOOLS
                         // ==================================
 
-                        tools: [
+
+                        tools:[
+
 
                             EyeService.tool,
 
+
                             ...AITools.tools
+
 
                         ],
 
 
 
+
+
+
+
                         // ==================================
-                        // AI PERSONALITY
+                        // AI INSTRUCTION
                         // ==================================
 
-                        systemInstruction: {
 
-                            parts: [
+                        systemInstruction:{
+
+
+
+                            parts:[
+
 
                                 {
 
+
                                     text:
+
 `
-تو یک دستیار فارسی‌زبان دوستانه و مفید هستی.
+تو یک دستیار هوشمند فارسی زبان هستی.
 
-پاسخ‌ها را طبیعی، کوتاه و واضح بده.
+قابلیت کنترل ربات و کار با فایل‌ها را داری.
 
-اگر کاربر درخواست تغییر حالت چشم‌های ربات را داشت،
-از ابزار کنترل چشم استفاده کن.
+قوانین فایل:
 
-اگر کاربر درباره فایل‌ها یا PDF ها سؤال داشت،
-از ابزارهای فایل استفاده کن.
+- وقتی کاربر درباره فایل یا PDF سوال کرد ابتدا از ابزار list_files استفاده کن.
+
+- اگر نیاز به خواندن فایل بود از ابزار open_pdf یا read_pdf استفاده کن.
+
+- برای پاسخ درباره PDF، خودت فایل را دریافت و تحلیل کن.
+
+- از کاربر نخواه فایل را دوباره ارسال کند اگر فایل در سیستم موجود است.
+
+- پاسخ‌ها کوتاه، طبیعی و دقیق باشند.
+
 `
+
 
                                 },
 
 
+
+
+
                                 {
 
+
                                     text:
-                                        EyeService.instructions
+
+                                    EyeService.instructions
+
 
                                 }
 
+
+
                             ]
+
+
 
                         }
 
 
+
                     }
 
+
+
                 }
+
+
 
             });
 
 
 
-        if (!token?.name) {
+
+
+
+
+
+        if(!token?.name){
+
 
             throw new Error(
-                "Gemini token ساخته نشد"
+
+                "Gemini Live token ساخته نشد"
+
             );
 
+
         }
+
+
+
+
+
+
+
+        console.log(
+
+            "✅ GEMINI LIVE TOKEN CREATED"
+
+        );
+
+
 
 
 
         return token.name;
 
 
+
     }
 
-    catch(error) {
+
+    catch(error){
+
 
 
         console.error(
+
             "❌ CREATE VOICE TOKEN ERROR:",
+
             error
+
         );
+
 
 
         throw error;
 
+
+
     }
+
+
 
 }
 
 
 
-// ======================================================
-// EXPORT
-// ======================================================
+
+
+
 
 module.exports = {
 
+
     createVoiceToken
+
 
 };

@@ -3,30 +3,107 @@ const fs = require("fs");
 const path = require("path");
 
 
-// مسیر ذخیره PDF های موقت
+// ======================================================
+// CONFIG
+// ======================================================
+
+const API_URL =
+    "https://iran-production-d9c4.up.railway.app";
+
+
+// ======================================================
+// TEMP DIRECTORY
+// ======================================================
+
 const TEMP_DIR = path.join(
     __dirname,
     "temp"
 );
 
 
-// ساخت پوشه اگر وجود ندارد
 if(!fs.existsSync(TEMP_DIR)){
+
     fs.mkdirSync(
         TEMP_DIR,
         {
             recursive:true
         }
     );
+
 }
 
 
 
-// دانلود PDF
-async function downloadPDF(
+// ======================================================
+// BUILD PDF URL
+// ======================================================
+
+function createPdfUrl(
     fileId,
-    pdfUrl
+    source = "telegram"
 ){
+
+
+    if(!fileId){
+
+        throw new Error(
+            "PDF fileId missing"
+        );
+
+    }
+
+
+
+    let url;
+
+
+
+    if(source === "telegram"){
+
+
+        url =
+        `${API_URL}/api/telegram-files/${fileId}/pdf`;
+
+
+    }
+    else{
+
+
+        url =
+        `${API_URL}/api/files/${fileId}/pdf`;
+
+
+    }
+
+
+
+    console.log(
+        "🔗 GENERATED PDF URL:",
+        url
+    );
+
+
+    return url;
+
+}
+
+
+
+
+// ======================================================
+// DOWNLOAD PDF
+// ======================================================
+
+async function downloadPDF(
+
+    fileId,
+
+    pdfUrl = null,
+
+    source = "telegram"
+
+){
+
 
     try{
 
@@ -37,19 +114,61 @@ async function downloadPDF(
         );
 
 
-        const filePath = path.join(
+
+        // ساخت لینک اگر وجود ندارد
+
+        if(
+            !pdfUrl
+        ){
+
+            pdfUrl =
+            createPdfUrl(
+                fileId,
+                source
+            );
+
+        }
+
+
+
+        if(
+            typeof pdfUrl !== "string" ||
+            !pdfUrl.startsWith("http")
+        ){
+
+            throw new Error(
+                "Invalid PDF URL: " + pdfUrl
+            );
+
+        }
+
+
+
+        console.log(
+            "📄 FINAL PDF URL:",
+            pdfUrl
+        );
+
+
+
+        const filePath =
+        path.join(
             TEMP_DIR,
             fileId + ".pdf"
         );
 
 
 
-        // اگر قبلا دانلود شده
-        if(fs.existsSync(filePath)){
 
+        // اگر قبلا دانلود شده
+
+        if(
+            fs.existsSync(filePath)
+        ){
 
             console.log(
-                "📂 PDF already exists"
+                "📂 PDF already exists:",
+                filePath
             );
 
 
@@ -66,24 +185,33 @@ async function downloadPDF(
 
             url:pdfUrl,
 
-            responseType:"stream"
+            responseType:"stream",
+
+            timeout:60000,
+
+            headers:{
+
+                Accept:
+                "application/pdf"
+
+            }
 
         });
 
 
 
 
-
         const writer =
-            fs.createWriteStream(
-                filePath
-            );
+        fs.createWriteStream(
+            filePath
+        );
 
 
 
         response.data.pipe(
             writer
         );
+
 
 
 
@@ -114,8 +242,19 @@ async function downloadPDF(
 
                 writer.on(
                     "error",
-                    reject
+                    (err)=>{
+
+                        console.error(
+                            "❌ WRITE PDF ERROR:",
+                            err.message
+                        );
+
+
+                        reject(err);
+
+                    }
                 );
+
 
 
             }
@@ -142,6 +281,11 @@ async function downloadPDF(
 }
 
 
+
+
 module.exports = {
-    downloadPdf: downloadPDF
+
+    downloadPdf:
+        downloadPDF
+
 };

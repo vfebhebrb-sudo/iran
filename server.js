@@ -145,7 +145,8 @@ const aiPdfRoutes =
 
     const pdfAIRouter = require("./routes/pdfAI");
 
-
+const rooboPdfRoute =
+    require("./routes/ROOBOPdf");
 // ======================================================
 // APP
 // ======================================================
@@ -310,6 +311,10 @@ app.use(
     userResultsRoutes
 );
 
+app.use(
+    "/api/ai/pdf",
+    rooboPdfRoute
+);
 
 // ------------------------------
 // Analysis
