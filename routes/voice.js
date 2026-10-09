@@ -6,7 +6,6 @@ const {
     createVoiceToken
 } = require("../voice/voiceSession");
 
-
 router.get("/token", async (req, res) => {
 
     try {

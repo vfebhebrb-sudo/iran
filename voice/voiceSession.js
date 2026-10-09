@@ -1,13 +1,21 @@
+"use strict";
+
 const { GoogleGenAI } = require("@google/genai");
 
 const EyeService =
     require("../services/eyeService");
 
-const AITools = require("../services/aiTools");
+const AITools =
+    require("../services/aiTools");
+
 
 const ai = new GoogleGenAI({
-    apiKey: process.env.GEMINI_API_KEY
+
+    apiKey:
+        process.env.GEMINI_API_KEY
+
 });
+
 
 
 // ======================================================
@@ -16,142 +24,166 @@ const ai = new GoogleGenAI({
 
 async function createVoiceToken() {
 
-    const now =
-        Date.now();
+    try {
 
 
-    // --------------------------------------------------
-    // Token expiration
-    // --------------------------------------------------
-
-    const expireTime =
-        new Date(
-            now + 30 * 60 * 1000
-        ).toISOString();
+        const now =
+            Date.now();
 
 
-    // --------------------------------------------------
-    // New session must start within 60 seconds
-    // --------------------------------------------------
 
-    const newSessionExpireTime =
-        new Date(
-            now + 60 * 1000
-        ).toISOString();
+        // --------------------------------------------------
+        // Token lifetime
+        // --------------------------------------------------
 
-
-    // ==================================================
-    // CREATE EPHEMERAL TOKEN
-    // ==================================================
-
-    const token =
-        await ai.authTokens.create({
-
-            config: {
-
-                // Token can be used for one session
-                uses: 1,
+        const expireTime =
+            new Date(
+                now + 30 * 60 * 1000
+            ).toISOString();
 
 
-                // Token lifetime
-                expireTime:
+
+        // --------------------------------------------------
+        // Session start window
+        // --------------------------------------------------
+
+        const newSessionExpireTime =
+            new Date(
+                now + 60 * 1000
+            ).toISOString();
+
+
+
+        // --------------------------------------------------
+        // Create ephemeral token
+        // --------------------------------------------------
+
+        const token =
+            await ai.authTokens.create({
+
+                config: {
+
+
+                    uses: 1,
+
+
                     expireTime,
 
 
-                // Time allowed to start a new session
-                newSessionExpireTime:
                     newSessionExpireTime,
 
 
-                // ==================================================
-                // LOCKED GEMINI LIVE CONFIGURATION
-                // ==================================================
 
-                bidiGenerateContentSetup: {
+                    // ======================================
+                    // GEMINI LIVE CONFIG
+                    // ======================================
 
-                    // ------------------------------------------------
-                    // Gemini Live model
-                    // ------------------------------------------------
-
-                    model:
-                        "models/gemini-3.8-live",
+                    bidiGenerateContentSetup: {
 
 
-                    // ------------------------------------------------
-                    // Response type
-                    // ------------------------------------------------
-
-                    responseModalities: [
-                        "AUDIO"
-                    ],
+                        model:
+                            "models/gemini-3.8-live",
 
 
-                    // ------------------------------------------------
-                    // Eye control tool
-                    // ------------------------------------------------
-                    //
-                    // Gemini can now call:
-                    //
-                    // set_eye_state({
-                    //     state: "happy"
-                    // })
-                    //
-                    // ------------------------------------------------
+
+                        responseModalities: [
+
+                            "AUDIO"
+
+                        ],
 
 
-tools: [
-    EyeService.tool,
-    ...AITools.tools
-],
 
-                    // ------------------------------------------------
-                    // System instructions
-                    // ------------------------------------------------
+                        // ==================================
+                        // AVAILABLE TOOLS
+                        // ==================================
 
-                    systemInstruction: {
+                        tools: [
 
-                        parts: [
+                            EyeService.tool,
 
-                            {
+                            ...AITools.tools
 
-                                text:
-                                    `
+                        ],
+
+
+
+                        // ==================================
+                        // AI PERSONALITY
+                        // ==================================
+
+                        systemInstruction: {
+
+                            parts: [
+
+                                {
+
+                                    text:
+`
 تو یک دستیار فارسی‌زبان دوستانه و مفید هستی.
 
 پاسخ‌ها را طبیعی، کوتاه و واضح بده.
 
-اگر کاربر مستقیماً درخواست تغییر حالت چشم‌های ربات را داد،
-باید از ابزار کنترل چشم استفاده کنی.
+اگر کاربر درخواست تغییر حالت چشم‌های ربات را داشت،
+از ابزار کنترل چشم استفاده کن.
+
+اگر کاربر درباره فایل‌ها یا PDF ها سؤال داشت،
+از ابزارهای فایل استفاده کن.
 `
 
-                            },
+                                },
 
 
-                            {
+                                {
 
-                                text:
-                                    EyeService.instructions
+                                    text:
+                                        EyeService.instructions
 
-                            }
+                                }
 
-                        ]
+                            ]
+
+                        }
+
 
                     }
 
                 }
 
-            }
-
-        });
+            });
 
 
-    // ==================================================
-    // RETURN TOKEN
-    // ==================================================
 
-    return token.name;
+        if (!token?.name) {
+
+            throw new Error(
+                "Gemini token ساخته نشد"
+            );
+
+        }
+
+
+
+        return token.name;
+
+
+    }
+
+    catch(error) {
+
+
+        console.error(
+            "❌ CREATE VOICE TOKEN ERROR:",
+            error
+        );
+
+
+        throw error;
+
+    }
 
 }
+
 
 
 // ======================================================

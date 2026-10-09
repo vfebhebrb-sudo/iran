@@ -4,7 +4,6 @@ const ai = new GoogleGenAI({
     apiKey: process.env.GEMINI_API_KEY
 });
 
-
 function pcmToWav(
     pcmData,
     sampleRate = 24000,
