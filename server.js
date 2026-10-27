@@ -145,8 +145,8 @@ const aiPdfRoutes =
 
     const pdfAIRouter = require("./routes/pdfAI");
 
-const rooboPdfRoute =
-    require("./routes/ROOBOPdf");
+// const rooboPdfRoute =
+//     require("./routes/ROOBOPdf");
 // ======================================================
 // APP
 // ======================================================
@@ -311,10 +311,12 @@ app.use(
     userResultsRoutes
 );
 
-app.use(
-    "/api/ai/pdf",
-    rooboPdfRoute
-);
+// ROOBOPdf غیرفعاله (require بالا کامنته)؛ این خط هم باید کامنت باشه
+// وگرنه سرور با ارور "rooboPdfRoute is not defined" بالا نمیاد
+// app.use(
+//     "/api/ai/pdf",
+//     rooboPdfRoute
+// );
 
 // ------------------------------
 // Analysis
