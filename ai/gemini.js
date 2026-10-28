@@ -268,6 +268,122 @@ async function askGeminiPdf(pdfBuffer, prompt, options = {}) {
 }
 
 // =================================================
+// TEXT TO SPEECH (ویس روبو)
+//
+// askGeminiSpeech(text, {
+//     voiceName: "Charon",      ← اسم صدا
+//     languageCode: "fa-IR",    ← اختیاری؛ خالی = تشخیص خودکار
+//     timeoutMs: 30000
+// })
+//
+// خروجی: { pcm: Buffer, rate: 24000, model } یا null
+// pcm صدای خام (16-bit، مونو) ـه؛ تبدیلش به ویس تلگرام با roboVoice.js
+// =================================================
+
+// اگه TTS_MODEL توی .env بذاری اول اون امتحان می‌شه؛ اسمی که تو حسابت نباشه رد می‌شه
+const TTS_MODEL_NAMES = [
+    process.env.TTS_MODEL,
+    "gemini-3.1-flash-tts-preview",
+    "gemini-2.5-flash-preview-tts"
+].filter(Boolean);
+
+async function askGeminiSpeech(text, options = {}) {
+
+    if (!GEMINI_API_KEY) return null;
+
+    const {
+        voiceName = "Charon",
+        languageCode = null,
+        timeoutMs = 30000
+    } = options;
+
+    const speechConfig = {
+        voiceConfig: { prebuiltVoiceConfig: { voiceName } }
+    };
+
+    if (languageCode) speechConfig.languageCode = languageCode;
+
+    for (const name of TTS_MODEL_NAMES) {
+
+        try {
+
+            console.log("🎙 TRY GEMINI TTS MODEL:", name);
+
+            const res = await fetch(
+                "https://generativelanguage.googleapis.com/v1beta/models/" + name + ":generateContent",
+                {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        "x-goog-api-key": GEMINI_API_KEY
+                    },
+                    body: JSON.stringify({
+                        contents: [{ parts: [{ text }] }],
+                        generationConfig: {
+                            responseModalities: ["AUDIO"],
+                            speechConfig
+                        }
+                    }),
+                    signal: AbortSignal.timeout(timeoutMs)
+                }
+            );
+
+            const data = await res.json().catch(() => null);
+
+            if (!res.ok) {
+
+                const error = new Error(
+                    (data && data.error && data.error.message) || "HTTP " + res.status
+                );
+
+                error.status = res.status;
+
+                throw error;
+
+            }
+
+            const parts = data?.candidates?.[0]?.content?.parts || [];
+
+            const part = parts.find(p => p.inlineData && p.inlineData.data);
+
+            if (part) {
+
+                console.log("✅ USING GEMINI TTS MODEL:", name);
+
+                const mime = part.inlineData.mimeType || "";
+
+                return {
+                    pcm: Buffer.from(part.inlineData.data, "base64"),
+                    rate: Number((/rate=(\d+)/.exec(mime) || [])[1]) || 24000,
+                    model: name
+                };
+
+            }
+
+        }
+        catch (error) {
+
+            console.log("❌ GEMINI TTS MODEL FAILED:", name);
+            console.log("   ERROR:", error.message);
+
+            if (isFatal(error)) {
+
+                console.log("⛔ FATAL ERROR, STOP TRYING OTHER TTS MODELS");
+                break;
+
+            }
+
+        }
+
+    }
+
+    console.log("🚨 ALL GEMINI TTS MODELS FAILED");
+
+    return null;
+
+}
+
+// =================================================
 // EXPORT
 // =================================================
 
@@ -275,3 +391,4 @@ module.exports = askGemini;
 
 module.exports.askGeminiPdf = askGeminiPdf;
 module.exports.askGroq = askGroq;
+module.exports.askGeminiSpeech = askGeminiSpeech;

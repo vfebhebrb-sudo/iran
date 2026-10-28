@@ -324,7 +324,8 @@ function buildTurnPrompt(ctx) {
         groupDigest,
         targetGroup,
         mood,
-        silenceMin
+        silenceMin,
+        voiceMode
     } = ctx;
 
     const chatLabel = chatType === "private"
@@ -362,6 +363,12 @@ function buildTurnPrompt(ctx) {
             : "گروه مدتیه ساکته.")
         : `آخرین پیام (شماره ${lastId}) از طرف ${clean(speakerName || "کاربر", 30)} بوده.${speakerNote ? " " + clean(speakerNote, 260) : ""}`;
 
+    const voiceNote = voiceMode === "requested"
+        ? "طرف ازت ویس خواسته. جوابت به‌صورت ویس فرستاده می‌شه: action=reply بذار و توی text همون حرفی رو بنویس که می‌خوای بگی؛ گفتاری و کوتاه، بدون لینک، ایموجی، فهرست و فرمت. ننویس «الان ویس می‌فرستم»؛ خودِ حرفت رو بزن."
+        : voiceMode === "offered"
+            ? "این بار اگه خواستی می‌تونی جوابت رو به‌جای متن با ویس بفرستی (voice=true)؛ فقط اگه جاش بود: شوخی، خوش‌آمد، تیکه‌ی کوتاه، حرف صمیمی. توی کمک فنی، جواب بلند، لینک و موقعیت جدی ویس نده."
+            : null;
+
     const situation = [
         `محل: ${chatLabel}`,
         nowText ? `زمان: ${clean(nowText, 60)}` : null,
@@ -369,6 +376,7 @@ function buildTurnPrompt(ctx) {
         botNote,
         shareNote ? clean(shareNote, 160) : null,
         mediaNote ? clean(mediaNote, 160) : null,
+        voiceNote,
         lastLine
     ].filter(Boolean).join("\n");
 
@@ -485,6 +493,7 @@ function normalize(obj, raw, validIds, opts = {}) {
             replyTo: null,
             media: null,
             relay: null,
+            voice: false,
             why: "plain",
             fallbackPlain: true
         };
@@ -571,6 +580,7 @@ function normalize(obj, raw, validIds, opts = {}) {
         replyTo,
         media,
         relay,
+        voice: action === "reply" && !relay && obj.voice === true,
         why: clean(obj.why, 60),
         fallbackPlain: false
     };

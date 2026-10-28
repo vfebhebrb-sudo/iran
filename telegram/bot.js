@@ -38,6 +38,8 @@ const media = require("./roboMedia");
 
 const profiler = require("./roboProfiler");
 
+const voice = require("./roboVoice");
+
 console.log("🔥 TELEGRAM ROBO BOT LOADED");
 
 const TOKEN = process.env.TELEGRAM_TOKEN;
@@ -638,6 +640,7 @@ function st(chatId) {
             proactiveTimes: [],
             lastInfo: null,
             lastMediaAt: 0,
+            lastVoiceAt: 0,
             recentMedia: [],
             engaged: new Map(),
             lastRoastAt: 0,
@@ -1664,6 +1667,25 @@ async function respond(job) {
     // مالک توی پیوی: می‌تونه ازم بخواد توی گروه‌ها چیزی بگم
     const ownerPrivate = Boolean(info.isOwner && isPrivate);
 
+    // ویس: requested = طرف خودش ویس خواسته | offered = روبو اگه خواست می‌تونه ویس بده
+    const voiceAsk = direct ? voice.detectRequest(cleanText) : null;
+
+    let voiceMode = "";
+
+    if (voice.isEnabled() && !ownerPrivate && voiceAsk !== "no" && info.kind !== "join") {
+
+        if (voiceAsk === "yes") {
+            voiceMode = "requested";
+        }
+        else if (
+            !SAD_TEXT.test(String(info.text || "").replace(/\u200c/g, " ")) &&
+            voice.spontaneousOffer(state)
+        ) {
+            voiceMode = "offered";
+        }
+
+    }
+
     let decision = null;
 
     let recent = [];
@@ -1749,7 +1771,8 @@ async function respond(job) {
             groupDigest: ownerCtx.digest,
             targetGroup: ownerCtx.targetGroup,
             mood,
-            silenceMin: info.silenceMin
+            silenceMin: info.silenceMin,
+            voiceMode
         });
 
     }
@@ -1869,7 +1892,65 @@ async function respond(job) {
 
     let sentAny = false;
 
-    if (decision.text) {
+    // ----- ویس (خواسته‌ی طرف، یا انتخابِ خودِ روبو) -----
+
+    let voiceSent = false;
+
+    const useVoice = Boolean(decision.text) && (
+        voiceMode === "requested" ||
+        (voiceMode === "offered" && decision.voice === true)
+    );
+
+    if (useVoice) {
+
+        const stopRecording = startTyping(chatId, info.threadId, "record_voice");
+
+        let sentVoice = null;
+
+        try {
+
+            sentVoice = await voice.speak(TOKEN, chatId, decision.text, {
+                replyTo,
+                threadId: info.threadId,
+                requested: voiceMode === "requested"
+            });
+
+        }
+        finally {
+
+            stopRecording();
+
+        }
+
+        // اگه ویس نشد (TTS خطا داد، متن طولانی بود...) پایین متن عادی می‌فرسته
+        if (sentVoice) {
+
+            console.log("🎙 VOICE SENT:", sentVoice.message_id);
+
+            voiceSent = true;
+
+            sentAny = true;
+
+            state.lastBotAt = Date.now();
+
+            state.lastVoiceAt = Date.now();
+
+            await saveGroupMessage({
+                chatId,
+                messageId: sentVoice.message_id,
+                userId: String(botInfo.id || "bot"),
+                username: botInfo.username,
+                name: "روبو",
+                text: `🎙 ${decision.text}`,
+                replyToMessageId: replyTo,
+                isBot: true
+            });
+
+        }
+
+    }
+
+    if (decision.text && !voiceSent) {
 
         await humanWait(chatId, info.threadId, decision.text.length, direct);
 
