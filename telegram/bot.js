@@ -40,6 +40,8 @@ const profiler = require("./roboProfiler");
 
 const voice = require("./roboVoice");
 
+const search = require("./roboSearch");
+
 console.log("🔥 TELEGRAM ROBO BOT LOADED");
 
 const TOKEN = process.env.TELEGRAM_TOKEN;
@@ -1696,6 +1698,8 @@ async function respond(job) {
 
     let mood = null;
 
+let web = null;
+
     try {
 
         recent = await getRecentGroupMessages(
@@ -1741,6 +1745,19 @@ async function respond(job) {
 
         }
 
+        // سرچ اینترنت: فقط وقتی مستقیم با روبو حرف می‌زنن (نه دخالت خودخواسته)
+        // اگه سرچ لازم نباشه null برمی‌گرده و هیچ چیزی عوض نمی‌شه
+        if (direct && info.kind !== "join" && info.kind !== "spark") {
+
+            web = await search.lookup({
+                chatId,
+                text: cleanText,
+                recent,
+                siteTopic: SITE_WORDS.test(cleanText)
+            });
+
+        }
+
         decision = await think({
             recent,
             trigger,
@@ -1772,7 +1789,8 @@ async function respond(job) {
             targetGroup: ownerCtx.targetGroup,
             mood,
             silenceMin: info.silenceMin,
-            voiceMode
+            voiceMode,
+            web
         });
 
     }
@@ -1952,9 +1970,12 @@ async function respond(job) {
 
     if (decision.text && !voiceSent) {
 
+        // اگه جواب از روی سرچ بوده، اسم سایت‌های منبع هم زیرش میاد
+        const textOut = decision.text + search.sourcesLine(web);
+
         await humanWait(chatId, info.threadId, decision.text.length, direct);
 
-        const sent = await sendOut(chatId, decision.text, {
+        const sent = await sendOut(chatId, textOut, {
             replyTo,
             threadId: info.threadId
         });
@@ -1973,7 +1994,7 @@ async function respond(job) {
             userId: String(botInfo.id || "bot"),
             username: botInfo.username,
             name: "روبو",
-            text: decision.text,
+            text: textOut,
             replyToMessageId: replyTo,
             isBot: true
         });
