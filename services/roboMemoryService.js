@@ -211,6 +211,27 @@ const getMemberModel = modelGetter("MemberProfile", MemberProfileSchema, "👥 M
 const getMediaModel = modelGetter("MediaItem", MediaItemSchema, "🎞 MEDIA ITEM");
 
 // ======================================================
+// GROUP CHAT REGISTRY — گروه‌هایی که روبو توشونه
+// (برای پل مالک پیوی↔گروه و شروع بحثِ خودکار)
+// ======================================================
+
+const GroupChatSchema = new mongoose.Schema({
+
+    chatId: { type: String, required: true, unique: true },
+
+    title: { type: String, default: null },
+
+    type: { type: String, default: "supergroup" },
+
+    firstSeenAt: { type: Date, default: Date.now },
+
+    lastSeenAt: { type: Date, default: Date.now }
+
+});
+
+const getGroupChatModel = modelGetter("GroupChat", GroupChatSchema, "🏠 GROUP CHAT");
+
+// ======================================================
 // SAVE MEMORY (مثل قبل)
 // ======================================================
 
@@ -953,6 +974,66 @@ async function getMediaStats() {
 
 }
 
+// ======================================================
+// GROUP CHATS (جدید)
+// ======================================================
+
+async function touchGroupChat(data) {
+
+    try {
+
+        if (!data || !data.chatId) return;
+
+        const Model = await getGroupChatModel();
+
+        const set = { lastSeenAt: new Date() };
+
+        if (data.title) set.title = data.title;
+
+        if (data.type) set.type = data.type;
+
+        await Model.updateOne(
+            { chatId: String(data.chatId) },
+            { $set: set, $setOnInsert: { firstSeenAt: new Date() } },
+            { upsert: true }
+        );
+
+    }
+    catch (error) {
+
+        if (error.code === 11000) return;
+
+        console.log("❌ GROUP CHAT TOUCH ERROR:", error.message);
+
+    }
+
+}
+
+// فقط گروه‌هایی که توی ۴۵ روز اخیر ازشون پیام دیده شده
+async function getKnownGroups(limit = 15) {
+
+    try {
+
+        const Model = await getGroupChatModel();
+
+        return await Model.find({
+            lastSeenAt: { $gt: new Date(Date.now() - 45 * 24 * 60 * 60 * 1000) }
+        })
+            .sort({ lastSeenAt: -1 })
+            .limit(limit)
+            .lean();
+
+    }
+    catch (error) {
+
+        console.log("❌ KNOWN GROUPS ERROR:", error.message);
+
+        return [];
+
+    }
+
+}
+
 module.exports = {
 
     getRoboMemoryModel,
@@ -1003,6 +1084,10 @@ module.exports = {
 
     countUserMedia,
 
-    getMediaStats
+    getMediaStats,
+
+    touchGroupChat,
+
+    getKnownGroups
 
 };

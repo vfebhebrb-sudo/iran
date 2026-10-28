@@ -1,6 +1,7 @@
 // ======================================================
 // TELEGRAM SMART ROBO BOT
 // v4: استیکر و گیف، شناخت اعضا، مشارکت متعادل‌تر
+// v5: شروع بحث توسط خود روبو، مالک (پل پیوی↔گروه)، لحن آروم‌تر
 // ======================================================
 
 const TelegramBot = require("node-telegram-bot-api");
@@ -20,7 +21,9 @@ const {
     getRoster,
     countKnownMembers,
     setMemberFlags,
-    forgetMember
+    forgetMember,
+    touchGroupChat,
+    getKnownGroups
 } = require("../services/roboMemoryService");
 
 const { getSiteContext } = require("../services/siteBrainService");
@@ -97,6 +100,37 @@ const CONFIG = {
 };
 
 // ======================================================
+// SPARK — روبو خودش گپ رو باز می‌کنه (وقتی گروه مدتیه ساکته)
+// ======================================================
+
+const SPARK = {
+
+    // خاموش کردن: ENABLED: false
+    ENABLED: true,
+
+    // هر چند دقیقه یه بار گروه‌ها بررسی بشن
+    TICK_MS: 5 * 60 * 1000,
+
+    // گروه حداقل این‌قدر ساکت باشه (و حداکثر این‌قدر؛ گروهِ مرده رو بیدار نمی‌کنه)
+    SILENCE_MIN_MS: 75 * 60 * 1000,
+
+    SILENCE_MAX_MS: 24 * 60 * 60 * 1000,
+
+    // حداقل فاصله از آخرین حرف خود روبو
+    MIN_GAP_MS: 3 * 60 * 60 * 1000,
+
+    // حداکثر شروع بحث در شبانه‌روز برای هر گروه
+    MAX_PER_DAY: 3,
+
+    // توی هر بررسی، با این احتمال اصلاً بره سراغش (کمی تصادفی بودن)
+    CHANCE: 0.4,
+
+    // فقط توی این ساعت‌ها (به وقت تهران)
+    HOURS: { start: 10, end: 23 }
+
+};
+
+// ======================================================
 // SMALL HELPERS
 // ======================================================
 
@@ -134,6 +168,44 @@ const FAIL_LINES = [
     "مغزم یه لحظه هنگ کرد، دوباره بگو",
     "سرور داره نفس‌نفس می‌زنه، یه دقیقه دیگه بپرس 😅"
 ];
+
+// ======================================================
+// OWNER — مالک ربات (@DoZhn5898)
+// تأیید فقط از روی اطلاعات خودِ تلگرام (آیدی و یوزرنیم) انجام می‌شه،
+// نه از روی متن پیام؛ پس کسی با «من مالکم» مالک نمی‌شه.
+//
+// برای امنیت بیشتر توی .env بذار: OWNER_ID=آیدی عددی خودت
+// (اولین باری که از مالک پیام بیاد، آیدی توی لاگ چاپ می‌شه)
+// ======================================================
+
+const OWNER_USERNAME = String(process.env.OWNER_USERNAME || "DoZhn5898")
+    .replace(/^@/, "")
+    .toLowerCase();
+
+let ownerId = process.env.OWNER_ID ? String(process.env.OWNER_ID) : null;
+
+function checkOwner(from) {
+
+    if (!from) return false;
+
+    const id = String(from.id);
+
+    // آیدی ثابت شده: فقط همون
+    if (ownerId) return id === ownerId;
+
+    if (from.username && from.username.toLowerCase() === OWNER_USERNAME) {
+
+        ownerId = id;
+
+        console.log("👑 OWNER DETECTED:", id, "→ برای امنیت بیشتر توی .env بذار OWNER_ID=" + id);
+
+        return true;
+
+    }
+
+    return false;
+
+}
 
 // ======================================================
 // FILE SYSTEM
@@ -676,15 +748,20 @@ function mediaNoteFor(state) {
 
 function speakerNoteFor(info) {
 
+    const parts = [];
+
+    if (info.isOwner) {
+        parts.push("(این آدم مالک و سازنده‌ی توئه؛ سیستم تأییدش کرده. باهاش صمیمی و چفت باش.)");
+    }
+
     if (info.isNew) {
-        return "(اولین باره از این آدم توی گروه پیام می‌بینی؛ شاید تازه‌وارده، شاید تا حالا ساکت بوده.)";
+        parts.push("(اولین باره از این آدم توی گروه پیام می‌بینی؛ شاید تازه‌وارده، شاید تا حالا ساکت بوده.)");
+    }
+    else if (info.absentHours && info.absentHours >= 72) {
+        parts.push(`(بعد از حدود ${Math.round(info.absentHours / 24)} روز غیبت برگشته.)`);
     }
 
-    if (info.absentHours && info.absentHours >= 72) {
-        return `(بعد از حدود ${Math.round(info.absentHours / 24)} روز غیبت برگشته.)`;
-    }
-
-    return "";
+    return parts.join(" ");
 
 }
 
@@ -847,6 +924,208 @@ async function pickMediaForSend(state, want, direct) {
 }
 
 // ======================================================
+// GROUP REGISTRY (گروه‌هایی که روبو توشونه؛ برای پل مالک و ابتکار)
+// ======================================================
+
+const groupSeen = new Map();
+
+function registerGroup(chat) {
+
+    if (!chat || chat.type === "private") return;
+
+    const id = String(chat.id);
+
+    const last = groupSeen.get(id);
+
+    if (last && Date.now() - last < 10 * 60 * 1000) return;
+
+    groupSeen.set(id, Date.now());
+
+    touchGroupChat({
+        chatId: id,
+        title: chat.title || null,
+        type: chat.type
+    }).catch(() => { });
+
+}
+
+// ======================================================
+// OWNER BRIDGE — پیامِ مالک (پیوی) → گروه
+// ======================================================
+
+// خلاصه‌ی چند پیام آخرِ گروهی که مالک ازش پرسیده
+async function buildDigest(groups, text) {
+
+    if (!groups.length) return null;
+
+    const value = String(text || "").toLowerCase();
+
+    let target = groups.find(
+        g => g.title && value.includes(String(g.title).toLowerCase())
+    );
+
+    if (!target && groups.length === 1 && /گروه|خبر|چی\s*شد|چیکار|بچه\s*ها/.test(value)) {
+        target = groups[0];
+    }
+
+    if (!target) return null;
+
+    const messages = await getRecentGroupMessages(String(target.chatId), 12);
+
+    if (!messages.length) return null;
+
+    return { title: target.title, messages };
+
+}
+
+async function doRelay(relay) {
+
+    try {
+
+        const target = String(relay.chatId);
+
+        // فقط گروه‌های شناخته‌شده
+        const known = await getKnownGroups();
+
+        if (!known.some(g => String(g.chatId) === target)) return false;
+
+        const stop = startTyping(target);
+
+        await sleep(rand(900, 2000));
+
+        stop();
+
+        const sent = await sendOut(target, relay.text);
+
+        st(target).lastBotAt = Date.now();
+
+        await saveGroupMessage({
+            chatId: target,
+            messageId: sent.message_id,
+            userId: String(botInfo.id || "bot"),
+            username: botInfo.username,
+            name: "روبو",
+            text: relay.text,
+            replyToMessageId: null,
+            isBot: true
+        });
+
+        console.log("🌉 RELAYED TO GROUP:", target);
+
+        return true;
+
+    }
+    catch (error) {
+
+        console.log("❌ RELAY ERROR:", error.message);
+
+        return false;
+
+    }
+
+}
+
+// ======================================================
+// SPARK — شروع بحث توسط خود روبو
+// ======================================================
+
+let sparkTimer = null;
+
+function startSparkLoop() {
+
+    if (!SPARK.ENABLED || sparkTimer) return;
+
+    sparkTimer = setInterval(() => {
+
+        sparkTick().catch(error => console.log("❌ SPARK ERROR:", error.message));
+
+    }, SPARK.TICK_MS);
+
+}
+
+async function sparkTick() {
+
+    if (isQuietHour()) return;
+
+    const hour = nowInfo().hour;
+
+    if (hour < SPARK.HOURS.start || hour >= SPARK.HOURS.end) return;
+
+    const groups = await getKnownGroups();
+
+    for (const group of groups) {
+
+        await maybeSpark(group).catch(
+            error => console.log("❌ SPARK GROUP ERROR:", error.message)
+        );
+
+    }
+
+}
+
+async function maybeSpark(group) {
+
+    const chatId = String(group.chatId);
+
+    const state = st(chatId);
+
+    // وسط کار یا منتظر دخالتِ عادی
+    if (state.busy > 0 || state.timer) return;
+
+    const now = Date.now();
+
+    state.sparkTimes = (state.sparkTimes || []).filter(t => now - t < 24 * 60 * 60 * 1000);
+
+    if (state.sparkTimes.length >= SPARK.MAX_PER_DAY) return;
+
+    if (now - state.lastBotAt < SPARK.MIN_GAP_MS) return;
+
+    if (Math.random() > SPARK.CHANCE) return;
+
+    const recent = await getRecentGroupMessages(chatId, 12);
+
+    if (recent.length < 3) return;
+
+    const last = recent[recent.length - 1];
+
+    // آخرین حرف مال خودش بوده و کسی جواب نداده: دوباره نیاد
+    if (last.isBot) return;
+
+    const silence = now - new Date(last.createdAt).getTime();
+
+    if (silence < SPARK.SILENCE_MIN_MS || silence > SPARK.SILENCE_MAX_MS) return;
+
+    state.sparkTimes.push(now);
+
+    console.log("✨ SPARK:", chatId, Math.round(silence / 60000), "min silence");
+
+    enqueue(chatId, () =>
+        respond({
+            chatId,
+            info: {
+                messageId: last.messageId,
+                userId: null,
+                username: null,
+                name: "گروه",
+                chatType: group.type || "supergroup",
+                title: group.title || null,
+                threadId: undefined,
+                text: "",
+                kind: "spark",
+                replyToUserId: null,
+                isNew: false,
+                absentHours: null,
+                silenceMin: silence / 60000
+            },
+            trigger: "none",
+            cleanText: "",
+            newName: null
+        })
+    );
+
+}
+
+// ======================================================
 // RESPOND — فکر کردن، تصمیم، ریکشن/ریپلای/استیکر
 // ======================================================
 
@@ -866,6 +1145,9 @@ async function respond(job) {
         ? startTyping(chatId, info.threadId)
         : () => { };
 
+    // مالک توی پیوی: می‌تونه ازم بخواد توی گروه‌ها چیزی بگم
+    const ownerPrivate = Boolean(info.isOwner && isPrivate);
+
     let decision = null;
 
     try {
@@ -876,7 +1158,7 @@ async function respond(job) {
         );
 
         // دخالت خودخواسته فقط وقتی سهم روبو از گروه متعادله
-        if (!direct && !balanceAllows(recent)) return;
+        if (!direct && info.kind !== "spark" && !balanceAllows(recent)) return;
 
         const tail = recent
             .slice(-4)
@@ -897,10 +1179,26 @@ async function respond(job) {
 
         const library = await media.getLibrarySummary();
 
+        let groups = [];
+
+        let groupDigest = null;
+
+        if (ownerPrivate) {
+
+            groups = await getKnownGroups();
+
+            groupDigest = await buildDigest(groups, cleanText);
+
+        }
+
         decision = await think({
             recent,
             trigger,
-            event: info.kind === "join" ? "join" : null,
+            event: info.kind === "join"
+                ? "join"
+                : info.kind === "spark"
+                    ? "spark"
+                    : null,
             chatType: info.chatType,
             chatTitle: info.title,
             speakerName: info.name,
@@ -917,7 +1215,11 @@ async function respond(job) {
             groupNote: isPrivate ? "" : groupNoteFor(social),
             people: social.people,
             roster: social.roster,
-            library: library.text
+            library: library.text,
+            ownerPrivate,
+            groups,
+            groupDigest,
+            silenceMin: info.silenceMin
         });
 
     }
@@ -946,6 +1248,19 @@ async function respond(job) {
     // متن ساده (غیر JSON) فقط وقتی صداش زدن قابل قبوله
     if (decision.fallbackPlain && !hard) return;
 
+    // پیام مالک (پیوی) به گروه؛ فقط وقتی مالک توی پیوی باشه
+    if (decision.relay && ownerPrivate) {
+
+        const ok = await doRelay(decision.relay);
+
+        if (!ok) {
+
+            decision.text = "نتونستم توی اون گروه پیام بفرستم. شاید از گروه دراومدم یا اجازه‌ی نوشتن ندارم.";
+
+        }
+
+    }
+
     let action = decision.action;
 
     let reaction = decision.reaction;
@@ -960,6 +1275,9 @@ async function respond(job) {
     }
 
     if (action === "ignore") return;
+
+    // شروع بحث فقط با جمله معنی داره (ریکشن به پیامِ چند ساعت پیش بی‌معنیه)
+    if (info.kind === "spark" && action !== "reply") return;
 
     // ----- ریکشن -----
 
@@ -1011,7 +1329,9 @@ async function respond(job) {
 
     if (!isPrivate) {
 
-        replyTo = decision.replyTo || (direct ? info.messageId : null);
+        replyTo = info.kind === "spark"
+            ? null
+            : (decision.replyTo || (direct ? info.messageId : null));
 
     }
 
@@ -1242,6 +1562,8 @@ async function onJoin(msg) {
 
     const chatId = String(msg.chat.id);
 
+    registerGroup(msg.chat);
+
     for (const user of members) {
 
         await touchMember({
@@ -1353,9 +1675,9 @@ async function onMessage(msg) {
 
         }
 
-        // فقط وقتی کل پیام «دریافت N» باشه (نه هر جمله‌ای که این کلمه توش بود)
+        // دریافت فایل
         const fileMatch = content.kind === "text"
-            ? text.match(/^دریافت\s+(\d+)$/)
+            ? text.match(/دریافت\s+(\d+)/)
             : null;
 
         if (fileMatch) {
@@ -1412,6 +1734,8 @@ async function onMessage(msg) {
 
             primeGroup(msg.chat).catch(() => { });
 
+            registerGroup(msg.chat);
+
             const meta = chatMeta.get(chatId);
 
             const role = meta && meta.ready
@@ -1457,6 +1781,7 @@ async function onMessage(msg) {
                 ? String(msg.reply_to_message.from.id)
                 : null,
             isNew: !isPrivate && !before,
+            isOwner: checkOwner(msg.from),
             absentHours: before && before.lastSeenAt
                 ? (Date.now() - new Date(before.lastSeenAt).getTime()) / 3600000
                 : null
@@ -1656,6 +1981,8 @@ function startBot() {
 
         });
 
+    ready.then(startSparkLoop);
+
     bot.on("message", async msg => {
 
         await ready;
@@ -1705,7 +2032,7 @@ async function notifyNewFile(data) {
 
 
 📦 ${data.size} bytes
-${data.link ? `\n🔗 ${data.link}\n` : ""}
+
 
 🤖 Riseo File Bot
 
