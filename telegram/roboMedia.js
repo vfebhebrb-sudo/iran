@@ -18,6 +18,7 @@ const {
     touchMediaUse,
     deleteMediaItem,
     deleteMediaSet,
+    deleteAllStickers,
     countUserMedia,
     getMediaStats
 } = require("../services/roboMemoryService");
@@ -704,6 +705,122 @@ async function handleIncoming(deps, msg) {
 }
 
 // ======================================================
+// OWNER COMMAND — «کل پک استیکرت رو حذف کن»
+//
+// فقط مالکِ تأییدشده (checkOwner توی bot.js؛ از روی آیدی/یوزرنیم تلگرام،
+// نه از روی متن پیام) می‌تونه کل استیکرهای روبو رو پاک کنه.
+// برای بقیه یه جوابِ ثابت برمی‌گرده تا مدل الکی ادعای حذف نکنه.
+// گیف‌ها دست نمی‌خورن؛ اگه خواستی اونا هم برن توی deleteAllStickers
+// فیلتر { kind: "sticker" } رو بردار.
+// ======================================================
+
+const WIPE_LINES = {
+
+    done: "تمام پک استیکر با موفقیت حذف شد ✅",
+
+    empty: "پک استیکرم از قبل خالی بود 😅",
+
+    fail: "نتونستم پک استیکر رو حذف کنم؛ یه مشکلی پیش اومد ❌",
+
+    denied: "این کار فقط دست مالکمه 😎"
+
+};
+
+function prepFa(text) {
+
+    return String(text || "")
+        .toLowerCase()
+        .replace(/ي/g, "ی")
+        .replace(/ك/g, "ک")
+        .replace(/[\u064B-\u065F\u0640]/g, "")
+        .replace(/\u200c/g, " ")
+        .replace(/\s+/g, " ")
+        .trim();
+
+}
+
+const NOT_LETTER = "(?![\\p{L}\\d])";
+
+const AFTER_WORD = "(?<![\\p{L}\\d])";
+
+// فعل امر: «حذف کن»، «پاک کن»، «حذفش کن»، «دلیت کن»، «از بین ببر»  («کنم» و «شد» نمی‌خوره)
+
+const WIPE_VERB = new RegExp(
+    `${AFTER_WORD}(?:` +
+    `(?:حذف|پاکسازی|پاک|دلیت|دیلیت|نابود|ریست)(?:شون|ش|شو)?\\s*(?:کنین|کنید|کنی|کن|بکنی|بکن)${NOT_LETTER}` +
+    `|از\\s*بین\\s*ببر${NOT_LETTER}` +
+    `|(?:delete|remove|clear|wipe)${NOT_LETTER}` +
+    `)`,
+    "iu"
+);
+
+const WIPE_NOUN = /استیکر|استکیر|sticker/iu;
+
+// «کل / همه / تمام / پک» یعنی کلِ کتابخونه، نه یه استیکرِ تکی
+
+const WIPE_SCOPE = new RegExp(
+    `${AFTER_WORD}(?:` +
+    `(?:کل|همه|تمامی|تمام|هر\\s?چی|all|whole|entire|every)${NOT_LETTER}` +
+    `|پک|پکیج|مجموعه|کلکسیون|pack` +
+    `)`,
+    "iu"
+);
+
+// «حذف نکن»، «نمی‌خوام پاک کنی»  → هیچ‌وقت اجرا نشه
+
+const WIPE_NEGATION = new RegExp(
+    `${AFTER_WORD}(?:نکن|نکنی|نکنین|نکنید|نمی\\s?خوام|نباید|مبادا|نه|don'?t|do not|never)${NOT_LETTER}`,
+    "iu"
+);
+
+// «اگه حذف کنی چی میشه؟» → سوال/شرط، نه دستور
+
+const WIPE_CONDITIONAL = new RegExp(
+    `${AFTER_WORD}(?:اگه|اگر|وقتی|چرا|چی\\s?می\\s?شه|چه\\s?می\\s?شه|چه\\s?اتفاقی|if|what if)${NOT_LETTER}`,
+    "iu"
+);
+
+function isStickerWipeRequest(text) {
+
+    const value = prepFa(text);
+
+    if (!value) return false;
+
+    if (!WIPE_NOUN.test(value)) return false;
+
+    if (!WIPE_VERB.test(value)) return false;
+
+    if (!WIPE_SCOPE.test(value)) return false;
+
+    if (WIPE_NEGATION.test(value)) return false;
+
+    if (WIPE_CONDITIONAL.test(value)) return false;
+
+    return true;
+
+}
+
+// متنِ جوابی که باید فرستاده بشه رو برمی‌گردونه
+
+async function handleStickerWipe(isOwner) {
+
+    if (!isOwner) return WIPE_LINES.denied;
+
+    const count = await deleteAllStickers();
+
+    invalidateLibraryCache();
+
+    if (count === null) return WIPE_LINES.fail;
+
+    if (count === 0) return WIPE_LINES.empty;
+
+    console.log("🗑 STICKER LIBRARY WIPED:", count);
+
+    return WIPE_LINES.done;
+
+}
+
+// ======================================================
 // CALLBACKS (دکمه‌ها)
 // ======================================================
 
@@ -872,6 +989,10 @@ module.exports = {
     sendItem,
 
     handleIncoming,
+
+    isStickerWipeRequest,
+
+    handleStickerWipe,
 
     onCallback
 

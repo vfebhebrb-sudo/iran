@@ -2569,6 +2569,27 @@ async function onMessage(msg) {
 
             }
 
+            // «کل پک استیکرت رو حذف کن»: فقط برای مالکِ تأییدشده اجرا می‌شه
+            // (اگه کس دیگه‌ای بگه، یه جوابِ ثابتِ «فقط مالک» می‌گیره)
+            if (
+                trigger !== "followup" &&
+                content.kind === "text" &&
+                media.isStickerWipeRequest(cleanedPlain)
+            ) {
+
+                const wipeAnswer = await media.handleStickerWipe(info.isOwner);
+
+                console.log("🗑 STICKER WIPE REQUEST:", userId, info.isOwner ? "owner" : "denied");
+
+                return enqueue(chatId, () =>
+                    sendOut(chatId, wipeAnswer, {
+                        replyTo,
+                        threadId: info.threadId
+                    })
+                );
+
+            }
+
             // لینک سایت
             const lowerText = cleanText.toLowerCase();
 

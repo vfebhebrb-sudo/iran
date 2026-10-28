@@ -912,6 +912,30 @@ async function deleteMediaSet(setName) {
 
 }
 
+// همه‌ی استیکرها (تکی و پک‌ها). گیف‌ها دست نمی‌خورن.
+// تعداد حذف‌شده‌ها رو برمی‌گردونه؛ null یعنی خطا (که با «هیچی نبود» قاطی نشه)
+
+async function deleteAllStickers() {
+
+    try {
+
+        const Model = await getMediaModel();
+
+        const res = await Model.deleteMany({ kind: "sticker" });
+
+        return res.deletedCount || 0;
+
+    }
+    catch (error) {
+
+        console.log("❌ DELETE ALL STICKERS ERROR:", error.message);
+
+        return null;
+
+    }
+
+}
+
 async function countUserMedia(userId) {
 
     try {
@@ -1081,6 +1105,8 @@ module.exports = {
     deleteMediaItem,
 
     deleteMediaSet,
+
+    deleteAllStickers,
 
     countUserMedia,
 
