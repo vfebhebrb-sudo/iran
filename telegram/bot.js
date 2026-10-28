@@ -1674,7 +1674,7 @@ async function respond(job) {
 
     let voiceMode = "";
 
-    if (voice.isEnabled() && !ownerPrivate && voiceAsk !== "no" && info.kind !== "join") {
+    if (voice.isEnabled() && (!ownerPrivate || voiceAsk === "yes") && voiceAsk !== "no" && info.kind !== "join") {
 
         if (voiceAsk === "yes") {
             voiceMode = "requested";
@@ -1687,6 +1687,14 @@ async function respond(job) {
         }
 
     }
+
+    // ویس خواسته شده ولی الان ممکن نیست (خاموشه یا کلید نیست): مدل نباید ادعا کنه فرستاده
+    if (!voiceMode && voiceAsk === "yes" && info.kind !== "join") {
+
+        voiceMode = "unavailable";
+
+    }
+
 
     let decision = null;
 
@@ -1914,7 +1922,9 @@ let web = null;
 
     let voiceSent = false;
 
-    const useVoice = Boolean(decision.text) && (
+    let voiceFailed = false;
+
+    const useVoice = Boolean(decision.text) && !decision.relay && (
         voiceMode === "requested" ||
         (voiceMode === "offered" && decision.voice === true)
     );
@@ -1941,6 +1951,8 @@ let web = null;
         }
 
         // اگه ویس نشد (TTS خطا داد، متن طولانی بود...) پایین متن عادی می‌فرسته
+        if (!sentVoice && voiceMode === "requested") voiceFailed = true;
+
         if (sentVoice) {
 
             console.log("🎙 VOICE SENT:", sentVoice.message_id);
@@ -1971,7 +1983,8 @@ let web = null;
     if (decision.text && !voiceSent) {
 
         // اگه جواب از روی سرچ بوده، اسم سایت‌های منبع هم زیرش میاد
-        const textOut = decision.text + search.sourcesLine(web);
+        const textOut = decision.text + search.sourcesLine(web) +
+            (voiceFailed ? "\n\n🎙 ویسِ این یکی درست نشد، برات متنی نوشتم" : "");
 
         await humanWait(chatId, info.threadId, decision.text.length, direct);
 
@@ -2680,6 +2693,8 @@ function startBot() {
         });
 
     ready.then(startSparkLoop);
+
+    ready.then(() => voice.diagnose());
 
     bot.on("message", async msg => {
 

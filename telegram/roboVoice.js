@@ -84,9 +84,9 @@ function prep(text) {
 
 }
 
-const NOUN = "(?:ویس(?:ی)?|وویس|صدا(?:ت)?(?:\\s*رو)?|صداتو|voice)";
+const NOUN = "(?:ویس(?:ی)?|وویس|صوت(?:ی)?|صدا(?:ت)?(?:\\s*رو)?|صداتو|voice)";
 
-const VERB = "(?:بده|بفرست|بفرس|بزار|بذار|بگیر|بگو|بخون|بزن|بنداز|ضبط\\s*کن|بشنوم|بشنویم|بشنوه)";
+const VERB = "(?:بده|بدی|بدین|بدید|بفرست|بفرس|بزار|بذار|بزاری|بذاری|بگیر|بگو|بگی|بخون|بخونی|بزن|بنداز|ضبط\\s*کن|بشنوم|بشنویم|بشنوه)";
 
 const YES = new RegExp(
     `${NOUN}(?:\\s+\\S+){0,3}?\\s*${VERB}` +
@@ -213,6 +213,10 @@ async function synthesize(text) {
 
     if (!spoken) return null;
 
+    if (typeof askGeminiSpeech !== "function") {
+        throw new Error("askGeminiSpeech توی ai/gemini.js export نشده");
+    }
+
     const audio = await askGeminiSpeech(`${VOICE.STYLE}: ${spoken}`, {
         voiceName: VOICE.VOICE_NAME,
         languageCode: VOICE.LANGUAGE
@@ -262,6 +266,107 @@ async function sendVoice(token, chatId, audio, options = {}) {
 }
 
 // ======================================================
+// DIAGNOSE (موقع استارت چک می‌کنه ویس اصلاً می‌تونه کار کنه)
+// ======================================================
+
+function runCommand(cmd, args) {
+
+    return new Promise(resolve => {
+
+        let out = "";
+
+        let finished = false;
+
+        const done = result => {
+            if (finished) return;
+            finished = true;
+            resolve(result);
+        };
+
+        let child;
+
+        try {
+            child = spawn(cmd, args);
+        }
+        catch (error) {
+            return done({ ok: false, out: error.message });
+        }
+
+        const timer = setTimeout(() => {
+            try { child.kill(); } catch (e) { /* مهم نیست */ }
+            done({ ok: false, out: "timeout" });
+        }, 8000);
+
+        child.stdout.on("data", chunk => { out += chunk; });
+
+        child.stderr.on("data", chunk => { out += chunk; });
+
+        child.on("error", error => {
+            clearTimeout(timer);
+            done({ ok: false, out: error.message });
+        });
+
+        child.on("close", code => {
+            clearTimeout(timer);
+            done({ ok: code === 0, out });
+        });
+
+    });
+
+}
+
+async function diagnose() {
+
+    try {
+
+        if (!VOICE.ENABLED) {
+            console.log("🎙 VOICE CHECK: خاموشه (VOICE_ENABLED=0)");
+            return false;
+        }
+
+        const problems = [];
+
+        if (!process.env.GEMINI_API_KEY) {
+            problems.push("GEMINI_API_KEY توی .env نیست");
+        }
+
+        if (typeof askGeminiSpeech !== "function") {
+            problems.push("askGeminiSpeech توی ai/gemini.js export نشده (تابع ساخت صدا وجود نداره)");
+        }
+
+        const ff = await runCommand(FFMPEG, ["-hide_banner", "-encoders"]);
+
+        if (!ff.ok) {
+            problems.push(`ffmpeg اجرا نمی‌شه (${String(ff.out).slice(0, 80)}) → روی سرور نصبش کن یا npm i ffmpeg-static`);
+        }
+        else if (!/libopus/.test(ff.out)) {
+            problems.push("ffmpeg نصبه ولی libopus نداره؛ نسخه‌ی کامل‌تر یا ffmpeg-static بذار");
+        }
+
+        if (problems.length) {
+
+            console.log("❌ VOICE CHECK: ویس کار نمی‌کنه، چون:\n  - " + problems.join("\n  - "));
+
+            return false;
+
+        }
+
+        console.log("✅ VOICE CHECK: همه‌چیز آماده‌ست (کلید، تابع صدا، ffmpeg + libopus)");
+
+        return true;
+
+    }
+    catch (error) {
+
+        console.log("❌ VOICE CHECK ERROR:", error.message);
+
+        return false;
+
+    }
+
+}
+
+// ======================================================
 // HIGH LEVEL
 // متن → ویس → ارسال. هر جا خراب شد null برمی‌گردونه
 // (و bot.js همون جواب رو متنی می‌فرسته)
@@ -275,11 +380,23 @@ async function speak(token, chatId, text, options = {}) {
             ? VOICE.MAX_CHARS_REQUESTED
             : VOICE.MAX_CHARS_SPONTANEOUS;
 
-        if (!isVoiceFriendly(text, max)) return null;
+        if (!isVoiceFriendly(text, max)) {
+
+            console.log("🎙 VOICE SKIP: متن به درد ویس نمی‌خوره (بلند، لینک، یا بیشترش لاتین):", String(text).length, "کاراکتر");
+
+            return null;
+
+        }
 
         const audio = await synthesize(text);
 
-        if (!audio) return null;
+        if (!audio) {
+
+            console.log("🎙 VOICE SKIP: مدل صدا هیچ صدایی برنگردوند");
+
+            return null;
+
+        }
 
         return await sendVoice(token, chatId, audio, options);
 
@@ -297,6 +414,8 @@ async function speak(token, chatId, text, options = {}) {
 module.exports = {
 
     isEnabled,
+
+    diagnose,
 
     detectRequest,
 
