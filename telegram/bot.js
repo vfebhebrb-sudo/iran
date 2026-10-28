@@ -2,6 +2,8 @@
 // TELEGRAM SMART ROBO BOT
 // v4: استیکر و گیف، شناخت اعضا، مشارکت متعادل‌تر
 // v5: شروع بحث توسط خود روبو، مالک (پل پیوی↔گروه)، لحن آروم‌تر
+// v6: ادامه‌ی گفتگو بدون صدا زدن (ENGAGE)، حال‌وهواهای خودخواسته (MOODS)،
+//     فعال‌تر شدن توی گروه، و دستورهای مالک از پیوی (پیام دادن / سوژه کردن توی گروه)
 // ======================================================
 
 const TelegramBot = require("node-telegram-bot-api");
@@ -56,24 +58,25 @@ const CONFIG = {
     CONTEXT_MESSAGES: 30,
 
     // بعد از آخرین پیام گروه، چند میلی‌ثانیه صبر کنه تا ببینه بحث تموم شد
-    DEBOUNCE_MS: 3500,
+    DEBOUNCE_MS: 3000,
 
     // حداکثر انتظار (وسط گفتگوی شلوغ هم گاهی فرصت دخالت پیدا کنه)
     MAX_WAIT_MS: 18000,
 
     // احتمال پایه‌ی اینکه اصلاً به یه پیام بی‌خطاب فکر کنه (۰ تا ۱)
     // (بالاتر = فعال‌تر؛ تعادل رو SHARE پایین حفظ می‌کنه)
-    BASE_CHANCE: 0.45,
+    BASE_CHANCE: 0.62,
 
     // حداقل فاصله بین دو دخالت خودخواسته‌ی روبو
-    COOLDOWN_MS: 45 * 1000,
+    COOLDOWN_MS: 25 * 1000,
 
     // حداکثر دخالت خودخواسته در ساعت برای هر گروه
-    MAX_PROACTIVE_PER_HOUR: 14,
+    MAX_PROACTIVE_PER_HOUR: 30,
 
-    // تعادل: از N پیام آخر، سهم روبو بیشتر از این نباشه (۰.۲۲ = حدود یک‌پنجم)
+    // تعادل: از N پیام آخر، سهم روبو بیشتر از این نباشه (۰.۳۵ = حدود یک‌سوم)
+    // (اگه خیلی پرحرف شد کمترش کن؛ مثلاً ۰.۲۲)
     SHARE_WINDOW: 20,
-    MAX_BOT_SHARE: 0.22,
+    MAX_BOT_SHARE: 0.35,
 
     // حداقل فاصله بین دو استیکر/گیف
     MEDIA_GAP_DIRECT_MS: 30 * 1000,
@@ -109,24 +112,77 @@ const SPARK = {
     ENABLED: true,
 
     // هر چند دقیقه یه بار گروه‌ها بررسی بشن
-    TICK_MS: 5 * 60 * 1000,
+    TICK_MS: 3 * 60 * 1000,
 
     // گروه حداقل این‌قدر ساکت باشه (و حداکثر این‌قدر؛ گروهِ مرده رو بیدار نمی‌کنه)
-    SILENCE_MIN_MS: 75 * 60 * 1000,
+    SILENCE_MIN_MS: 25 * 60 * 1000,
 
-    SILENCE_MAX_MS: 24 * 60 * 60 * 1000,
+    SILENCE_MAX_MS: 48 * 60 * 60 * 1000,
 
     // حداقل فاصله از آخرین حرف خود روبو
-    MIN_GAP_MS: 3 * 60 * 60 * 1000,
+    MIN_GAP_MS: 50 * 60 * 1000,
 
     // حداکثر شروع بحث در شبانه‌روز برای هر گروه
-    MAX_PER_DAY: 3,
+    MAX_PER_DAY: 8,
 
     // توی هر بررسی، با این احتمال اصلاً بره سراغش (کمی تصادفی بودن)
-    CHANCE: 0.4,
+    CHANCE: 0.55,
 
     // فقط توی این ساعت‌ها (به وقت تهران)
-    HOURS: { start: 10, end: 23 }
+    HOURS: { start: 9, end: 24 }
+
+};
+
+// ======================================================
+// ENGAGE — بعد از اینکه کسی صداش زد (یا روبو خودش به کسی حرف زد)،
+// پیام‌های بعدیِ همون آدم هم خطاب به روبو حساب می‌شه؛ لازمه نیست هر بار اسمش رو بیاره.
+// اگه طرف داره با یکی دیگه حرف می‌زنه (ریپلای به یه نفر دیگه، منشنِ یه نفر دیگه)
+// یا چند نفر دیگه وسط حرف زدن، روبو نمی‌پره وسط.
+// ======================================================
+
+const ENGAGE = {
+
+    // خاموش کردن: ENABLED: false
+    ENABLED: true,
+
+    // بعد از آخرین تعامل با یه نفر، تا این‌قدر پیام‌های بعدیش «ادامه‌ی گفتگو» حساب می‌شه
+    WINDOW_MS: 5 * 60 * 1000,
+
+    // اگه این‌قدر پیامِ آدم‌های دیگه وسط اومد، گفتگو تموم‌شده فرض می‌شه
+    MAX_OTHERS_BETWEEN: 8,
+
+    // سقف جوابِ پشت‌سرهم بدون اینکه دوباره اسم روبو بیاد
+    MAX_TURNS: 15,
+
+    // اگه آدم چند پیام پشت‌سرهم نوشت، این‌قدر صبر کن تا تموم کنه
+    DEBOUNCE_MS: 1800
+
+};
+
+// ======================================================
+// MOODS — حال‌وهوای دخالت‌های خودخواسته (هر بار یکی انتخاب می‌شه)
+// وزن‌ها نسبی‌ان؛ برای خاموش کردن یه حالت وزنش رو بذار ۰
+//  warm=مهربون  funny=شوخ  opinion=نظر دادن  serious=جدی
+//  dignified=سنگین و باوقار  roast=سوژه کردن  rude=تند و بی‌ادب (فقط با آدمِ تیکه‌پذیرِ سطح ۳)
+// ======================================================
+
+const MOODS = {
+
+    WEIGHTS: {
+        warm: 22,
+        funny: 26,
+        opinion: 16,
+        serious: 8,
+        dignified: 6,
+        roast: 16,
+        rude: 6
+    },
+
+    // حداقل فاصله بین دو «سوژه کردن» توی یه گروه
+    ROAST_GAP_MS: 8 * 60 * 1000,
+
+    // یه نفر رو توی این بازه دوباره سوژه نکنه
+    SAME_TARGET_GAP_MS: 30 * 60 * 1000
 
 };
 
@@ -140,10 +196,30 @@ const rand = (min, max) => Math.floor(min + Math.random() * (max - min + 1));
 
 const pick = list => list[Math.floor(Math.random() * list.length)];
 
+// یکدست‌سازی متن فارسی برای مقایسه (ي/ی، ك/ک، نیم‌فاصله، اعراب، علامت‌ها)
+function normFa(text) {
+
+    return String(text || "")
+        .toLowerCase()
+        .replace(/[يى]/g, "ی")
+        .replace(/ك/g, "ک")
+        .replace(/[\u064B-\u065F\u0640]/g, "")
+        .replace(/\u200c/g, " ")
+        .replace(/[^\p{L}\p{N}@_\s]/gu, " ")
+        .replace(/\s+/g, " ")
+        .trim();
+
+}
+
 const SITE_WORDS = /سایت|فایل|درس|جزوه|ریزئو|riseo|pdf|دانلود|نمونه\s?سوال|امتحان|کتاب/i;
 
 // حرف زدن درباره‌ی ربات و هوش مصنوعی (روبو دوست داره وارد این بحث‌ها بشه)
 const BOT_TALK = /(?<![\p{L}])(?:ربات|روبات|بات|هوش\s?مصنوعی|chatgpt|gpt|gemini|جمینای)(?![\p{L}])/iu;
+
+// جای شوخی نیست: غم، استرس، بیماری، «بس کن»... (روی متنِ بدون نیم‌فاصله چک می‌شه)
+const SAD_TEXT = /غمگین|ناراحت|افسرده|گریه|بغض|مریض|بیمار|فوت|عزا|بد\s?حالم|حالم\s?بده|استرس|می\sترسم|تنهام|دلم\s?گرفته|بس\s?کن|اذیت\s?نکن|ولم\s?کن/;
+
+const LAUGHY = /[😂🤣😹]|ه{3,}|خخ+/u;
 
 const FORGET_LINES = [
     "باشه، هر چی از تو یادم بود پاک شد. از اول با هم آشنا می‌شیم 😄",
@@ -259,6 +335,9 @@ function getTrigger(msg, text) {
     ) {
         return "reply_to_bot";
     }
+
+    // ادامه‌ی گفتگو: همین آدم تازه با روبو حرف می‌زد و الان بدون صدا زدن می‌نویسه
+    if (detectFollowup(msg, text)) return "followup";
 
     return "none";
 
@@ -559,7 +638,10 @@ function st(chatId) {
             proactiveTimes: [],
             lastInfo: null,
             lastMediaAt: 0,
-            recentMedia: []
+            recentMedia: [],
+            engaged: new Map(),
+            lastRoastAt: 0,
+            lastRoastUserId: null
         });
 
     }
@@ -581,6 +663,305 @@ function enqueue(chatId, job) {
         .finally(() => { state.busy--; });
 
     return state.chain;
+
+}
+
+// ======================================================
+// ENGAGE (ادامه‌ی گفتگو بدون صدا زدن)
+// ======================================================
+
+// صدا زدن مستقیم، یا اینکه روبو خودش یه نفر رو مخاطب قرار داد
+function openEngage(chatId, userId) {
+
+    if (!ENGAGE.ENABLED || !userId) return;
+
+    st(chatId).engaged.set(String(userId), {
+        until: Date.now() + ENGAGE.WINDOW_MS,
+        others: 0,
+        turns: 0
+    });
+
+}
+
+// بعد از هر جوابِ روبو توی گفتگو: پنجره تمدید می‌شه
+function touchEngage(chatId, userId) {
+
+    if (!ENGAGE.ENABLED || !userId) return;
+
+    const map = st(chatId).engaged;
+
+    const prev = map.get(String(userId));
+
+    map.set(String(userId), {
+        until: Date.now() + ENGAGE.WINDOW_MS,
+        others: 0,
+        turns: prev ? prev.turns + 1 : 1
+    });
+
+}
+
+function closeEngage(chatId, userId) {
+
+    st(chatId).engaged.delete(String(userId));
+
+}
+
+// هر پیامِ یه آدمِ دیگه یعنی گفتگو یه قدم از دست این آدم دور شد
+function bumpOthers(chatId, userId) {
+
+    if (!ENGAGE.ENABLED) return;
+
+    const map = st(chatId).engaged;
+
+    const now = Date.now();
+
+    for (const [id, entry] of map) {
+
+        if (now > entry.until || entry.others >= ENGAGE.MAX_OTHERS_BETWEEN) {
+            map.delete(id);
+            continue;
+        }
+
+        if (id !== String(userId)) entry.others++;
+
+    }
+
+}
+
+function detectFollowup(msg, text) {
+
+    if (!ENGAGE.ENABLED || !msg.from || msg.chat.type === "private") return false;
+
+    const state = chats.get(String(msg.chat.id));
+
+    if (!state) return false;
+
+    const key = String(msg.from.id);
+
+    const entry = state.engaged.get(key);
+
+    if (!entry) return false;
+
+    if (
+        Date.now() > entry.until ||
+        entry.others >= ENGAGE.MAX_OTHERS_BETWEEN ||
+        entry.turns >= ENGAGE.MAX_TURNS
+    ) {
+        state.engaged.delete(key);
+        return false;
+    }
+
+    // ریپلای به یه نفر دیگه = داره با اون حرف می‌زنه
+    const replied = msg.reply_to_message && msg.reply_to_message.from;
+
+    if (replied && (!botInfo.id || replied.id !== botInfo.id)) return false;
+
+    // منشنِ یه نفر دیگه = خطاب به اون
+    const tags = String(text || "").match(/@[A-Za-z0-9_]{4,}/g) || [];
+
+    const me = "@" + String(botInfo.username || "").toLowerCase();
+
+    if (tags.some(tag => tag.toLowerCase() !== me)) return false;
+
+    return true;
+
+}
+
+// چند پیامِ پشت‌سرهمِ یه نفر یه جواب می‌گیره، نه چند تا
+const followTimers = new Map();
+
+function scheduleFollowup(chatId, userId, job) {
+
+    const key = chatId + ":" + userId;
+
+    const old = followTimers.get(key);
+
+    if (old) clearTimeout(old.timer);
+
+    const first = old ? old.first : Date.now();
+
+    const wait = Date.now() - first > 6000 ? 0 : ENGAGE.DEBOUNCE_MS;
+
+    const timer = setTimeout(() => {
+
+        followTimers.delete(key);
+
+        enqueue(chatId, () => respond(job));
+
+    }, wait);
+
+    followTimers.set(key, { timer, first });
+
+}
+
+// کارِ یه چت رو توی صفِ همون چت اجرا کن و نتیجه‌اش رو برگردون
+function enqueueResult(chatId, job) {
+
+    return new Promise(resolve => {
+
+        enqueue(chatId, async () => {
+
+            try {
+                resolve(await job());
+            }
+            catch (error) {
+                console.log("❌ ROBO JOB ERROR:", error.message);
+                resolve(false);
+            }
+
+        });
+
+    });
+
+}
+
+// کدوم آدم‌ها توی یه متن اسم برده شدن (با اسم یا @یوزرنیم)
+function findMentionedPeople(text, people) {
+
+    const tokens = new Set(normFa(text).split(" ").filter(Boolean));
+
+    return (people || []).filter(p => {
+
+        if (!p || String(p.userId) === String(botInfo.id)) return false;
+
+        if (p.username && tokens.has("@" + String(p.username).toLowerCase())) return true;
+
+        return normFa(p.name)
+            .split(" ")
+            .filter(t => t.length >= 2)
+            .some(t => tokens.has(t));
+
+    });
+
+}
+
+// ======================================================
+// MOOD PICKER (دخالت‌های خودخواسته؛ هر بار یه حال‌وهوای متفاوت)
+// ======================================================
+
+function isRoastable(profile) {
+
+    if (!profile || String(profile.userId) === String(botInfo.id)) return false;
+
+    if (profile.noTeasing) return false;
+
+    const learned = profile.learned || {};
+
+    // نوجوون‌ها و آدم‌های کم‌شوخی سوژه‌ی خودخواسته نمی‌شن
+    if (learned.young === true || learned.humor === "low") return false;
+
+    const ceiling = profiler.teaseCeiling(profile);
+
+    if (ceiling >= 2) return true;
+
+    // هنوز تحلیل هوشمند نشده ولی از شمارنده‌ها معلومه که اهل خنده و شوخیه
+    const n = Number(profile.msgCount || 0);
+
+    return ceiling >= 1 && n >= 10 && Number(profile.laughCount || 0) / n > 0.12;
+
+}
+
+function weightedPick(weights) {
+
+    const entries = Object.entries(weights).filter(([, w]) => w > 0);
+
+    if (!entries.length) return "funny";
+
+    let total = 0;
+
+    for (const [, w] of entries) total += w;
+
+    let roll = Math.random() * total;
+
+    for (const [key, w] of entries) {
+
+        roll -= w;
+
+        if (roll <= 0) return key;
+
+    }
+
+    return entries[0][0];
+
+}
+
+function pickMood(info, social, recent, state) {
+
+    const lastText = String(info.text || "").replace(/\u200c/g, " ");
+
+    const tailText = recent
+        .slice(-4)
+        .map(m => m.text)
+        .join(" ")
+        .replace(/\u200c/g, " ");
+
+    // خوش‌آمد، یا جایی که کسی ناراحته: فقط مهربون
+    if (info.kind === "join") return { key: "warm", target: null };
+
+    if (SAD_TEXT.test(lastText) || SAD_TEXT.test(tailText)) {
+        return { key: "warm", target: null };
+    }
+
+    const now = Date.now();
+
+    const weights = Object.assign({}, MOODS.WEIGHTS);
+
+    // سوال و بحث درسی: جدی و کمک‌کن بهتره، نه تیکه
+    if (/[?؟]/.test(lastText)) {
+        weights.serious += 18;
+        weights.warm += 8;
+        weights.roast = 0;
+        weights.rude = 0;
+    }
+
+    if (SITE_WORDS.test(lastText)) {
+        weights.serious += 12;
+        weights.rude = 0;
+        weights.roast = Math.floor(weights.roast / 2);
+    }
+
+    if (LAUGHY.test(tailText)) {
+        weights.funny += 10;
+        weights.roast += 8;
+    }
+
+    // سوژه‌های ممکن (از آدم‌های همین بحث)
+    const recentTarget = id =>
+        state.lastRoastUserId === String(id) &&
+        now - state.lastRoastAt < MOODS.SAME_TARGET_GAP_MS;
+
+    const candidates = (social.people || [])
+        .filter(isRoastable)
+        .filter(p => !recentTarget(p.userId));
+
+    if (!candidates.length || now - state.lastRoastAt < MOODS.ROAST_GAP_MS) {
+        weights.roast = 0;
+        weights.rude = 0;
+    }
+
+    const heavy = candidates.filter(p => profiler.teaseCeiling(p) >= 3);
+
+    if (!heavy.length) weights.rude = 0;
+
+    const key = weightedPick(weights);
+
+    if (key !== "roast" && key !== "rude") return { key, target: null };
+
+    const pool = key === "rude" ? heavy : candidates;
+
+    // اگه همونی که الان حرف زده سوژه‌پذیره، بیشتر سراغ اونه
+    const speaker = pool.find(p => String(p.userId) === String(info.userId));
+
+    const chosen = speaker && Math.random() < 0.65 ? speaker : pick(pool);
+
+    return {
+        key,
+        target: {
+            userId: String(chosen.userId),
+            name: chosen.name || chosen.username || "کاربر",
+            username: chosen.username || null
+        }
+    };
 
 }
 
@@ -953,32 +1334,155 @@ function registerGroup(chat) {
 // OWNER BRIDGE — پیامِ مالک (پیوی) → گروه
 // ======================================================
 
-// خلاصه‌ی چند پیام آخرِ گروهی که مالک ازش پرسیده
-async function buildDigest(groups, text) {
+// آخرین گروهی که مالک ازش حرف زده (برای وقتی که اسم گروه رو نمی‌گه)
+let ownerFocus = null;
+
+// حرف از گروه و دستور و خبر گرفتنه؟ (برای وقتی که اسم گروه توی متن نیست)
+const GROUP_ASK = /گروه|بچه\s?ها|برو|بگو|بنویس|بفرست|برسون|سوژه|مسخره|تیکه|رست|حالش|بپیچون|خبر|چی\s*شد|چه\s*خبر|چیکار|اعلام|بزن/;
+
+// گروهی که مالک منظورشه: اسم گروه > کلمه‌های اسم > آخرین گروه > تک‌گروه
+function resolveOwnerGroup(groups, text) {
 
     if (!groups.length) return null;
 
-    const value = String(text || "").toLowerCase();
+    const value = normFa(text);
 
-    let target = groups.find(
-        g => g.title && value.includes(String(g.title).toLowerCase())
-    );
+    if (!value) return null;
 
-    if (!target && groups.length === 1 && /گروه|خبر|چی\s*شد|چیکار|بچه\s*ها/.test(value)) {
-        target = groups[0];
+    const titled = groups
+        .map(g => ({ g, title: normFa(g.title) }))
+        .filter(x => x.title.length >= 2);
+
+    // ۱) اسم کاملِ گروه توی متنه
+    const whole = titled
+        .filter(x => value.includes(x.title))
+        .sort((a, b) => b.title.length - a.title.length);
+
+    if (whole.length) return whole[0].g;
+
+    // ۲) یکی از کلمه‌های اسم گروه
+    const words = new Set(value.split(" "));
+
+    let best = null;
+    let bestScore = 0;
+    let tie = false;
+
+    for (const x of titled) {
+
+        const score = x.title.split(" ").filter(w => w.length >= 3 && words.has(w)).length;
+
+        if (score > bestScore) {
+            best = x.g;
+            bestScore = score;
+            tie = false;
+        }
+        else if (score > 0 && score === bestScore) {
+            tie = true;
+        }
+
     }
 
-    if (!target) return null;
+    if (best && !tie) return best;
 
-    const messages = await getRecentGroupMessages(String(target.chatId), 12);
+    // اسمی نیومده: فقط وقتی حرف از گروه و دستوره حدس بزن
+    if (!GROUP_ASK.test(value)) return null;
 
-    if (!messages.length) return null;
+    // ۳) آخرین گروهی که ازش حرف زده بودن
+    if (ownerFocus && Date.now() - ownerFocus.at < 3 * 60 * 60 * 1000) {
 
-    return { title: target.title, messages };
+        const known = groups.find(g => String(g.chatId) === ownerFocus.chatId);
+
+        if (known) return known;
+
+    }
+
+    // ۴) فقط یه گروه هست
+    if (groups.length === 1) return groups[0];
+
+    return null;
 
 }
 
-async function doRelay(relay) {
+// اعضایی از گروه که مالک اسمشون (یا یوزرنیمشون) رو آورده
+function findPeopleInText(text, roster, max = 4) {
+
+    const tokens = new Set(normFa(text).split(" ").filter(Boolean));
+
+    const found = [];
+
+    for (const member of roster || []) {
+
+        const names = normFa(member.name).split(" ").filter(t => t.length >= 2);
+
+        const user = member.username ? String(member.username).toLowerCase() : null;
+
+        const hit = names.some(t => tokens.has(t)) ||
+            (user && (tokens.has("@" + user) || tokens.has(user)));
+
+        if (hit) found.push(member);
+
+        if (found.length >= max) break;
+
+    }
+
+    return found;
+
+}
+
+const EMPTY_OWNER_CTX = { groups: [], targetGroup: null, digest: null, people: [], roster: [] };
+
+// همه‌ی چیزایی که روبو لازم داره تا دستورِ مالک رو توی گروهِ درست و با مایه‌ی واقعی اجرا کنه
+async function buildOwnerContext(text) {
+
+    const groups = await getKnownGroups();
+
+    const target = resolveOwnerGroup(groups, text);
+
+    if (!target) return Object.assign({}, EMPTY_OWNER_CTX, { groups });
+
+    const targetId = String(target.chatId);
+
+    ownerFocus = { chatId: targetId, at: Date.now() };
+
+    const [messages, rosterEntry] = await Promise.all([
+        getRecentGroupMessages(targetId, 30),
+        getRosterCached(targetId)
+    ]);
+
+    // اول کسایی که مالک اسمشون رو آورده، بعد کسایی که تازه حرف زدن
+    const ids = [];
+
+    for (const member of findPeopleInText(text, rosterEntry.roster)) {
+        ids.push(String(member.userId));
+    }
+
+    for (let i = messages.length - 1; i >= 0 && ids.length < CONFIG.PEOPLE_MAX + 4; i--) {
+
+        const m = messages[i];
+
+        if (m.isBot) continue;
+
+        if (!ids.includes(String(m.userId))) ids.push(String(m.userId));
+
+    }
+
+    const people = await getProfiles(targetId, ids);
+
+    people.sort((a, b) => ids.indexOf(String(a.userId)) - ids.indexOf(String(b.userId)));
+
+    return {
+        groups,
+        targetGroup: target,
+        digest: messages.length
+            ? { title: target.title, messages: messages.slice(-25) }
+            : null,
+        people,
+        roster: rosterEntry.roster
+    };
+
+}
+
+async function doRelay(relay, people) {
 
     try {
 
@@ -989,30 +1493,41 @@ async function doRelay(relay) {
 
         if (!known.some(g => String(g.chatId) === target)) return false;
 
-        const stop = startTyping(target);
+        return await enqueueResult(target, async () => {
 
-        await sleep(rand(900, 2000));
+            const stop = startTyping(target);
 
-        stop();
+            await sleep(rand(900, 2000) + Math.min(relay.text.length * 20, 2500));
 
-        const sent = await sendOut(target, relay.text);
+            stop();
 
-        st(target).lastBotAt = Date.now();
+            const sent = await sendOut(target, relay.text, {
+                replyTo: relay.replyTo || null
+            });
 
-        await saveGroupMessage({
-            chatId: target,
-            messageId: sent.message_id,
-            userId: String(botInfo.id || "bot"),
-            username: botInfo.username,
-            name: "روبو",
-            text: relay.text,
-            replyToMessageId: null,
-            isBot: true
+            st(target).lastBotAt = Date.now();
+
+            await saveGroupMessage({
+                chatId: target,
+                messageId: sent.message_id,
+                userId: String(botInfo.id || "bot"),
+                username: botInfo.username,
+                name: "روبو",
+                text: relay.text,
+                replyToMessageId: relay.replyTo || null,
+                isBot: true
+            });
+
+            // کسی که توی پیام اسمش اومد جواب بده، خطاب به روبو حساب می‌شه
+            for (const person of findMentionedPeople(relay.text, people)) {
+                openEngage(target, person.userId);
+            }
+
+            console.log("🌉 RELAYED TO GROUP:", target);
+
+            return true;
+
         });
-
-        console.log("🌉 RELAYED TO GROUP:", target);
-
-        return true;
 
     }
     catch (error) {
@@ -1137,7 +1652,8 @@ async function respond(job) {
 
     const direct = trigger !== "none";
 
-    const hard = direct && trigger !== "reply_to_bot";
+    // «ادامه‌ی گفتگو» هم مثل ریپلای به روبو نرمه: اگه مال روبو نبود ignore می‌شه، اجباری ریکشن نمی‌زنه
+    const hard = direct && trigger !== "reply_to_bot" && trigger !== "followup";
 
     const isPrivate = info.chatType === "private";
 
@@ -1150,9 +1666,17 @@ async function respond(job) {
 
     let decision = null;
 
+    let recent = [];
+
+    let social = { people: [], roster: [], known: 0, memberCount: null };
+
+    let ownerCtx = EMPTY_OWNER_CTX;
+
+    let mood = null;
+
     try {
 
-        const recent = await getRecentGroupMessages(
+        recent = await getRecentGroupMessages(
             chatId,
             CONFIG.CONTEXT_MESSAGES
         );
@@ -1173,21 +1697,25 @@ async function respond(job) {
             ? await getMemory(chatId, info.userId)
             : [];
 
-        const social = isPrivate
+        social = isPrivate
             ? { people: [], roster: [], known: 0, memberCount: null }
             : await gatherPeople(chatId, info, recent);
 
         const library = await media.getLibrarySummary();
 
-        let groups = [];
-
-        let groupDigest = null;
-
+        // مالک توی پیوی: گروهِ مقصد + آدم‌هاش + چند پیام آخرِ اون گروه
         if (ownerPrivate) {
 
-            groups = await getKnownGroups();
+            ownerCtx = await buildOwnerContext(cleanText);
 
-            groupDigest = await buildDigest(groups, cleanText);
+        }
+
+        // دخالت خودخواسته (بدون صدا زدن): حال‌وهوای این بار رو انتخاب کن
+        if (!direct && !isPrivate) {
+
+            mood = pickMood(info, social, recent, state);
+
+            console.log("🎚 MOOD:", mood.key, mood.target ? mood.target.name : "");
 
         }
 
@@ -1202,7 +1730,7 @@ async function respond(job) {
             chatType: info.chatType,
             chatTitle: info.title,
             speakerName: info.name,
-            speakerId: info.userId,
+            speakerId: ownerPrivate ? null : info.userId,
             userMemory,
             siteContext,
             lastBotAgoSec: state.lastBotAt
@@ -1213,12 +1741,14 @@ async function respond(job) {
             shareNote: isPrivate ? "" : shareNoteFor(recent),
             mediaNote: mediaNoteFor(state),
             groupNote: isPrivate ? "" : groupNoteFor(social),
-            people: social.people,
-            roster: social.roster,
+            people: ownerPrivate ? ownerCtx.people : social.people,
+            roster: ownerPrivate ? ownerCtx.roster : social.roster,
             library: library.text,
             ownerPrivate,
-            groups,
-            groupDigest,
+            groups: ownerCtx.groups,
+            groupDigest: ownerCtx.digest,
+            targetGroup: ownerCtx.targetGroup,
+            mood,
             silenceMin: info.silenceMin
         });
 
@@ -1251,7 +1781,7 @@ async function respond(job) {
     // پیام مالک (پیوی) به گروه؛ فقط وقتی مالک توی پیوی باشه
     if (decision.relay && ownerPrivate) {
 
-        const ok = await doRelay(decision.relay);
+        const ok = await doRelay(decision.relay, ownerCtx.people);
 
         if (!ok) {
 
@@ -1331,7 +1861,9 @@ async function respond(job) {
 
         replyTo = info.kind === "spark"
             ? null
-            : (decision.replyTo || (direct ? info.messageId : null));
+            : trigger === "followup"
+                ? (decision.replyTo || null)
+                : (decision.replyTo || (direct ? info.messageId : null));
 
     }
 
@@ -1437,6 +1969,49 @@ async function respond(job) {
         state.lastProactiveAt = Date.now();
 
         state.proactiveTimes.push(Date.now());
+
+        // «سوژه کردن» رو بشمار تا یه نفر یا یه گروه زیر بار نره
+        if (mood && (mood.key === "roast" || mood.key === "rude") && decision.text) {
+
+            state.lastRoastAt = Date.now();
+
+            state.lastRoastUserId = mood.target ? String(mood.target.userId) : null;
+
+        }
+
+    }
+
+    // طرفِ گفتگو رو «درگیر» نگه دار تا لازم نباشه دوباره اسم روبو رو بیاره
+    if (!isPrivate && decision.text) {
+
+        if (direct) {
+
+            touchEngage(chatId, info.userId);
+
+        }
+        else {
+
+            const targets = new Set();
+
+            if (mood && mood.target) targets.add(String(mood.target.userId));
+
+            if (decision.replyTo) {
+
+                const replied = recent.find(
+                    m => Number(m.messageId) === Number(decision.replyTo)
+                );
+
+                if (replied && !replied.isBot) targets.add(String(replied.userId));
+
+            }
+
+            for (const person of findMentionedPeople(decision.text, social.people)) {
+                targets.add(String(person.userId));
+            }
+
+            targets.forEach(id => openEngage(chatId, id));
+
+        }
 
     }
 
@@ -1789,6 +2364,9 @@ async function onMessage(msg) {
 
         console.log("📩 MESSAGE:", trigger, "|", content.full);
 
+        // پیامِ یه نفر دیگه یعنی گفتگوهای بازِ بقیه یه قدم دورتر شد
+        if (!isPrivate) bumpOthers(chatId, userId);
+
         // ==========================================
         // ذخیره در تاریخچه‌ی گروه (همه‌ی پیام‌ها)
         // پیام مشکوک به‌جای متن اصلی ذخیره می‌شه
@@ -1818,7 +2396,15 @@ async function onMessage(msg) {
 
             const replyTo = msg.chat.type === "private" ? null : msg.message_id;
 
+            // صدا زدن مستقیم: از این لحظه پیام‌های بعدیِ همین آدم هم خطاب به روبو حساب می‌شه
+            // (حتی اگه فقط نوشته «روبو» و سوالش رو توی پیام بعدی می‌گه)
+            if (!isPrivate && trigger !== "followup" && !suspicious) {
+                openEngage(chatId, userId);
+            }
+
             if (!cleanText) {
+
+                if (trigger === "followup") return;
 
                 return enqueue(chatId, () =>
                     sendOut(chatId, pick(EMPTY_CALL_LINES), {
@@ -1833,6 +2419,9 @@ async function onMessage(msg) {
             if (suspicious) {
 
                 console.log("🚫 SUSPICIOUS MESSAGE BLOCKED:", cleanText);
+
+                // ادامه‌ی گفتگو بود و مشکوک؟ بی‌صدا رد شو
+                if (trigger === "followup") return;
 
                 return enqueue(chatId, () =>
                     sendOut(chatId, pick(BLOCK_LINES), {
@@ -1851,6 +2440,8 @@ async function onMessage(msg) {
                 nameCache.delete(chatId + ":" + userId);
 
                 rosterCache.delete(chatId);
+
+                closeEngage(chatId, userId);
 
                 console.log("🧹 FORGOTTEN:", chatId, userId, result);
 
@@ -1918,15 +2509,20 @@ https://vfebhebrb-sudo.github.io/Riseo/
 
             }
 
-            return enqueue(chatId, () =>
-                respond({
-                    chatId,
-                    info,
-                    trigger,
-                    cleanText,
-                    newName: detectedName
-                })
-            );
+            const job = {
+                chatId,
+                info,
+                trigger,
+                cleanText,
+                newName: detectedName
+            };
+
+            // ادامه‌ی گفتگو: چند پیام پشت‌سرهم یه جواب می‌گیره
+            if (trigger === "followup") {
+                return scheduleFollowup(chatId, userId, job);
+            }
+
+            return enqueue(chatId, () => respond(job));
 
         }
 
