@@ -24,13 +24,13 @@ const genAI = new GoogleGenerativeAI(GEMINI_API_KEY || "missing");
 // اسمی که تو حسابت نباشه رد می‌شه.
 // =================================================
 
+
 const MODEL_NAMES = [
-    "gemini-3.5-flash",
-    "gemini-3-flash",
     "gemini-2.5-flash",
-    "gemini-3.1-flash-lite",
+    "gemini-2.5-pro",
     "gemini-2.5-flash-lite"
 ];
+
 
 const GROQ_MODEL = "llama-3.3-70b-versatile";
 
