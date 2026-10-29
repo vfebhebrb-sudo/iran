@@ -26,7 +26,9 @@ const {
     setMemberFlags,
     forgetMember,
     touchGroupChat,
-    getKnownGroups
+    getKnownGroups,
+    setGroupObserving,
+    getObservingChatIds
 } = require("../services/roboMemoryService");
 
 const { getSiteContext } = require("../services/siteBrainService");
@@ -44,6 +46,8 @@ const voice = require("./roboVoice");
 const format = require("./roboFormat");
 
 const search = require("./roboSearch");
+
+const quiet = require("./roboQuiet");
 
 console.log("🔥 TELEGRAM ROBO BOT LOADED");
 
@@ -71,19 +75,29 @@ const CONFIG = {
     MAX_WAIT_MS: 18000,
 
     // احتمال پایه‌ی اینکه اصلاً به یه پیام بی‌خطاب فکر کنه (۰ تا ۱)
-    // (بالاتر = فعال‌تر؛ تعادل رو SHARE پایین حفظ می‌کنه)
-    BASE_CHANCE: 0.62,
+    // پایینه چون روبو فقط وقتی وارد می‌شه که چیزی برای گفتن داشته باشه؛
+    // سوال، حرف درباره‌ی ربات/سایت و ... احتمال رو بالا می‌برن (interestChance)
+    // (بالاتر = فعال‌تر)
+    BASE_CHANCE: 0.12,
 
     // حداقل فاصله بین دو دخالت خودخواسته‌ی روبو
-    COOLDOWN_MS: 25 * 1000,
+    COOLDOWN_MS: 3 * 60 * 1000,
 
     // حداکثر دخالت خودخواسته در ساعت برای هر گروه
-    MAX_PROACTIVE_PER_HOUR: 30,
+    MAX_PROACTIVE_PER_HOUR: 6,
 
-    // تعادل: از N پیام آخر، سهم روبو بیشتر از این نباشه (۰.۳۵ = حدود یک‌سوم)
-    // (اگه خیلی پرحرف شد کمترش کن؛ مثلاً ۰.۲۲)
+    // بین دو حرفِ خودخواسته‌ی روبو حداقل این‌قدر پیامِ آدم‌ها بیاد
+    // (اگه پیامِ آخر سوال باشه، QUESTION_MIN_BETWEEN)
+    MIN_HUMAN_BETWEEN: 5,
+    QUESTION_MIN_BETWEEN: 3,
+
+    // اگه توی ۴۵ ثانیه‌ی اخیر این‌قدر پیام اومده، گروه شلوغه؛ صبر کنه آروم بشه
+    BUSY_MESSAGES: 6,
+
+    // تعادل: از N پیام آخر، سهم روبو بیشتر از این نباشه (۰.۱۵ = حدود یک‌هفتم)
+    // (اگه هنوز زیاده کمترش کن؛ مثلاً ۰.۱۰)
     SHARE_WINDOW: 20,
-    MAX_BOT_SHARE: 0.35,
+    MAX_BOT_SHARE: 0.15,
 
     // حداقل فاصله بین دو استیکر/گیف
     MEDIA_GAP_DIRECT_MS: 30 * 1000,
@@ -130,10 +144,10 @@ const SPARK = {
     MIN_GAP_MS: 50 * 60 * 1000,
 
     // حداکثر شروع بحث در شبانه‌روز برای هر گروه
-    MAX_PER_DAY: 8,
+    MAX_PER_DAY: 4,
 
     // توی هر بررسی، با این احتمال اصلاً بره سراغش (کمی تصادفی بودن)
-    CHANCE: 0.55,
+    CHANCE: 0.4,
 
     // فقط توی این ساعت‌ها (به وقت تهران)
     HOURS: { start: 9, end: 24 }
@@ -245,6 +259,18 @@ const BLOCK_LINES = [
     "این ترفندا برا من قدیمیه، یه چیز جدید بیار 😎",
     "فکر کردی با دو تا صفر و یک خر می‌شم؟ 😂",
     "هکر شدی؟ برو یه چایی بخور بابا"
+];
+
+const OBSERVE_ON_LINES = [
+    "باشه، دیگه حرفی نمی‌زنم؛ فقط نگاه می‌کنم 👀",
+    "چشم، ساکت شدم و فقط می‌خونم. هر وقت خواستی بگو «روبو بیا»",
+    "باشه، نظاره‌گر می‌شم. با «روبو بیا» برمی‌گردم 👀"
+];
+
+const OBSERVE_OFF_LINES = [
+    "اومدم! 😄 چه خبره؟",
+    "برگشتم، چی از دست دادم؟ 😎",
+    "باشه، دوباره بین شمام 👋"
 ];
 
 const FAIL_LINES = [
@@ -1231,6 +1257,76 @@ function balanceAllows(recent) {
 // PROACTIVE (دخالت خودخواسته مثل آدم)
 // ======================================================
 
+// ======================================================
+// جریان گفتگو: الان اصلاً جای دخالت هست؟
+// (قبل از اینکه مدل صدا زده بشه؛ ارزون و بدون هوش مصنوعی)
+// ======================================================
+
+function readFlow(recent, info) {
+
+    // خوش‌آمد به تازه‌وارد همیشه جاش هست
+    if (info.kind === "join") return { skip: false };
+
+    const text = String(info.text || "").replace(/\u200c/g, " ");
+
+    const isQuestion = /[?؟]/.test(text);
+
+    const aboutUs = BOT_TALK.test(text) || SITE_WORDS.test(text);
+
+    // ۱) از آخرین حرفِ روبو چند پیامِ آدم‌ها اومده؟
+    let sinceBot = 0;
+
+    for (let i = recent.length - 1; i >= 0; i--) {
+
+        if (recent[i].isBot) break;
+
+        sinceBot++;
+
+    }
+
+    const need = isQuestion ? CONFIG.QUESTION_MIN_BETWEEN : CONFIG.MIN_HUMAN_BETWEEN;
+
+    if (sinceBot < need) {
+        return { skip: true, why: `از حرف قبلیِ خودم فقط ${sinceBot} پیام گذشته` };
+    }
+
+    // ۲) خطاب به یه نفر دیگه (ریپلای به آدمِ دیگه یا منشنِ یه نفر)
+    if (info.replyToUserId && String(info.replyToUserId) !== String(botInfo.id)) {
+        return { skip: true, why: "داره به یکی دیگه جواب می‌ده" };
+    }
+
+    if (/@[A-Za-z0-9_]{4,}/.test(text)) {
+        return { skip: true, why: "یکی رو منشن کرده" };
+    }
+
+    // ۳) دو نفر دارن با هم حرف می‌زنن (مگه درباره‌ی ربات یا سایت باشه)
+    if (!aboutUs) {
+
+        const humans = recent.filter(m => !m.isBot).slice(-6);
+
+        const people = new Set(humans.map(m => String(m.userId)));
+
+        if (humans.length >= 5 && people.size === 2) {
+            return { skip: true, why: "دو نفر دارن با هم حرف می‌زنن" };
+        }
+
+    }
+
+    // ۴) گروه شلوغه و پشت‌سرهم پیام می‌آد: صبر کن آروم بشه
+    const now = Date.now();
+
+    const burst = recent.filter(
+        m => !m.isBot && now - new Date(m.createdAt).getTime() < 45 * 1000
+    ).length;
+
+    if (burst >= CONFIG.BUSY_MESSAGES && !aboutUs) {
+        return { skip: true, why: "گروه شلوغه" };
+    }
+
+    return { skip: false };
+
+}
+
 function interestChance(info, state) {
 
     const value = String(info.text || "").trim();
@@ -1240,32 +1336,37 @@ function interestChance(info, state) {
 
     let chance = CONFIG.BASE_CHANCE;
 
-    if (/[?؟]/.test(value)) chance += 0.25;
+    // سوالِ بی‌جواب (آخرین پیامه و هنوز کسی جوابش رو نداده)
+    if (/[?؟]/.test(value)) chance += 0.2;
 
-    if (value.length < 4) chance -= 0.2;
+    if (value.length < 6) chance -= 0.08;
 
-    if (value.length > 60) chance += 0.1;
+    if (value.length > 80) chance += 0.04;
 
-    if (SITE_WORDS.test(value)) chance += 0.2;
+    if (SITE_WORDS.test(value)) chance += 0.15;
 
-    if (BOT_TALK.test(value)) chance += 0.25;
+    if (BOT_TALK.test(value)) chance += 0.3;
 
-    if (/[😂🤣😹]/u.test(value)) chance += 0.1;
+    if (/[😂🤣😹]/u.test(value)) chance += 0.04;
 
-    if (info.kind === "sticker" || info.kind === "gif") chance += 0.1;
+    // استیکر و گیفِ تنها معمولاً حرفی برای جواب دادن نداره
+    if (info.kind === "sticker" || info.kind === "gif") chance -= 0.05;
 
     // خیلی وقته چیزی نگفته: یه ذره بیشتر تمایل داره
     const quietMin = state.lastBotAt
         ? (Date.now() - state.lastBotAt) / 60000
         : 999;
 
-    if (quietMin > 10) chance += 0.1;
+    if (quietMin > 30) chance += 0.08;
 
-    return Math.max(0.05, Math.min(0.85, chance));
+    return Math.max(0.02, Math.min(0.6, chance));
 
 }
 
 function scheduleProactive(chatId, info) {
+
+    // حالت نظاره‌گر: هیچ دخالتی برنامه‌ریزی نمی‌شه
+    if (quiet.isObserving(chatId)) return;
 
     const state = st(chatId);
 
@@ -1313,6 +1414,9 @@ async function evaluateProactive(chatId) {
 
     if (isQuietHour()) return;
 
+    // حالت نظاره‌گر
+    if (quiet.isObserving(chatId)) return;
+
     const now = Date.now();
 
     // تازه حرف زده؛ فوراً دوباره نیاد
@@ -1323,6 +1427,20 @@ async function evaluateProactive(chatId) {
     state.proactiveTimes = state.proactiveTimes.filter(t => now - t < 60 * 60 * 1000);
 
     if (state.proactiveTimes.length >= CONFIG.MAX_PROACTIVE_PER_HOUR) return;
+
+    // جریان گفتگو رو ببین: الان جای دخالت هست؟
+    const flow = readFlow(
+        await getRecentGroupMessages(chatId, CONFIG.CONTEXT_MESSAGES),
+        info
+    );
+
+    if (flow.skip) {
+
+        console.log("🤫 SKIP:", flow.why);
+
+        return;
+
+    }
 
     if (Math.random() > interestChance(info, state)) return;
 
@@ -1686,6 +1804,9 @@ async function maybeSpark(group) {
 
     const chatId = String(group.chatId);
 
+    // حالت نظاره‌گر: خودش گپ رو باز نمی‌کنه
+    if (quiet.isObserving(chatId)) return;
+
     const state = st(chatId);
 
     // وسط کار یا منتظر دخالتِ عادی
@@ -1751,6 +1872,15 @@ async function maybeSpark(group) {
 async function respond(job) {
 
     const { chatId, info, trigger, cleanText, newName } = job;
+
+    // حالت نظاره‌گر: کارهایی که قبل از ساکت شدن توی صف مونده بودن هم چیزی نمی‌فرستن
+    if (
+        info.chatType !== "private" &&
+        quiet.isObserving(chatId) &&
+        !(quiet.QUIET.ANSWER_DIRECT_CALLS && trigger !== "none")
+    ) {
+        return;
+    }
 
     const state = st(chatId);
 
@@ -2625,6 +2755,85 @@ async function onMessage(msg) {
         if (Date.now() / 1000 - msg.date > CONFIG.STALE_SECONDS) return;
 
         // ==========================================
+        // حالت نظاره‌گر (فقط گروه‌ها)
+        //  «روبو فعلاً وارد بحث نشو / ساکت باش» → فقط می‌خونه
+        //  «روبو بیا / حرف بزن» → برمی‌گرده
+        // ==========================================
+
+        if (!isPrivate) {
+
+            if (direct && !suspicious && content.kind === "text") {
+
+                const command = quiet.detectCommand(cleanedPlain);
+
+                const replyOptions = { replyTo: msg.message_id, threadId: info.threadId };
+
+                if (command === "observe") {
+
+                    // قبلاً ساکت شده؛ بی‌صدا رد شو
+                    if (quiet.isObserving(chatId)) return;
+
+                    quiet.start(chatId, userId);
+
+                    setGroupObserving(chatId, true).catch(() => { });
+
+                    // کارهای نیمه‌کاره‌ی این گروه کنسل
+                    const groupState = st(chatId);
+
+                    if (groupState.timer) {
+                        clearTimeout(groupState.timer);
+                        groupState.timer = null;
+                    }
+
+                    groupState.engaged.clear();
+
+                    console.log("👀 OBSERVE MODE ON:", chatId, userId);
+
+                    return enqueue(chatId, () =>
+                        sendOut(chatId, pick(OBSERVE_ON_LINES), replyOptions)
+                    );
+
+                }
+
+                if (command === "resume" && quiet.isObserving(chatId)) {
+
+                    quiet.stop(chatId);
+
+                    setGroupObserving(chatId, false).catch(() => { });
+
+                    console.log("🔊 OBSERVE MODE OFF:", chatId, userId);
+
+                    return enqueue(chatId, () =>
+                        sendOut(chatId, pick(OBSERVE_OFF_LINES), replyOptions)
+                    );
+
+                }
+
+            }
+
+            if (quiet.isObserving(chatId) && !(quiet.QUIET.ANSWER_DIRECT_CALLS && direct)) {
+
+                // «منو فراموش کن» حتی وقتی ساکته اجرا می‌شه (بی‌صدا؛ فقط یه ریکشن)
+                if (direct && !suspicious && profiler.isForgetRequest(cleanedPlain)) {
+
+                    await forgetMember(chatId, userId);
+
+                    nameCache.delete(chatId + ":" + userId);
+
+                    rosterCache.delete(chatId);
+
+                    await setReaction(chatId, msg.message_id, "👌");
+
+                }
+
+                // بقیه‌ی پیام‌ها: فقط خونده می‌شن (قبلاً توی تاریخچه و پروفایل ثبت شدن)
+                return;
+
+            }
+
+        }
+
+        // ==========================================
         // خطاب مستقیم به روبو
         // ==========================================
 
@@ -2820,6 +3029,17 @@ function startBot() {
 
     console.log("🤖 ROBO STARTED");
 
+    // گروه‌هایی که ساکتشون کردن (بعد از ری‌استارت هم ساکت می‌مونن)
+    const observeLoaded = getObservingChatIds()
+        .then(ids => {
+
+            quiet.load(ids);
+
+            if (ids.length) console.log("👀 OBSERVING GROUPS:", ids.length);
+
+        })
+        .catch(error => console.log("OBSERVE LOAD ERROR:", error.message));
+
     const ready = bot.getMe()
         .then(me => {
 
@@ -2834,13 +3054,15 @@ function startBot() {
 
         });
 
-    ready.then(startSparkLoop);
+    Promise.all([ready, observeLoaded]).then(startSparkLoop);
 
     ready.then(() => voice.diagnose());
 
     bot.on("message", async msg => {
 
         await ready;
+
+        await observeLoaded;
 
         await onMessage(msg);
 
