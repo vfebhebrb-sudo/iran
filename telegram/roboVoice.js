@@ -13,7 +13,10 @@
 //
 // تنظیم‌های اختیاری توی .env:
 //   VOICE_ENABLED=0       خاموش کردن کامل
-//   TTS_VOICE=Charon      اسم صدا (Kore، Puck، Charon، Aoede ...)
+//   TTS_VOICE=Charon      اسم صدای پیش‌فرض (Kore، Puck، Charon، Aoede ...)
+//   TTS_VOICE_FEMALE=Kore صدای زنانه (وقتی مالک بگه «با صدای زن»)
+//   TTS_VOICE_MALE=...    صدای مردانه (پیش‌فرض: همون TTS_VOICE)
+//   VOICE_GENDER_FOR_ALL=1  همه بتونن نوع صدا رو انتخاب کنن (پیش‌فرض: فقط مالک)
 //   TTS_LANGUAGE=fa-IR    خالی = زبان خودکار تشخیص داده می‌شه
 //   TTS_MODEL=...         مدلِ دلخواه (اول اون امتحان می‌شه)
 // ======================================================
@@ -38,6 +41,16 @@ const VOICE = {
     ENABLED: process.env.VOICE_ENABLED !== "0",
 
     VOICE_NAME: process.env.TTS_VOICE || "Charon",
+
+    // صدای زنانه: وقتی مالک بگه «با صدای زن ویس بده». هر اسم دیگه‌ی Gemini رو می‌تونی توی .env بذاری
+    // (مثلاً Kore، Aoede، Leda، Sulafat، Zephyr)
+    VOICE_NAME_FEMALE: process.env.TTS_VOICE_FEMALE || "Kore",
+
+    // صدای مردانه: وقتی مالک بگه «با صدای مرد»؛ پیش‌فرضش همون TTS_VOICE ـه
+    VOICE_NAME_MALE: process.env.TTS_VOICE_MALE || process.env.TTS_VOICE || "Charon",
+
+    // انتخابِ نوع صدا فقط برای مالکه. برای همه‌ی اعضا باز بشه: VOICE_GENDER_FOR_ALL=1
+    GENDER_FOR_ALL: process.env.VOICE_GENDER_FOR_ALL === "1",
 
     LANGUAGE: process.env.TTS_LANGUAGE || null,
 
@@ -86,7 +99,7 @@ function prep(text) {
 
 const NOUN = "(?:ویس(?:ی)?|وویس|صوت(?:ی)?|صدا(?:ت)?(?:\\s*رو)?|صداتو|voice)";
 
-const VERB = "(?:بده|بدی|بدین|بدید|بفرست|بفرس|بزار|بذار|بزاری|بذاری|بگیر|بگو|بگی|بخون|بخونی|بزن|بنداز|ضبط\\s*کن|بشنوم|بشنویم|بشنوه)";
+const VERB = "(?:بده|بدی|بدین|بدید|بفرست|بفرس|بفرستین|بفرستید|بزار|بذار|بزارین|بزارید|بذارین|بذارید|بزاری|بذاری|بگیر|بگو|بگی|بخون|بخونی|بزن|بنداز|بساز|بیار|درست\\s*کن|ارسال\\s*کن|ضبط\\s*کن|میدی|می\\s*دی|میفرستی|می\\s*فرستی|میذاری|می\\s*ذاری|میزاری|می\\s*زاری|بشنوم|بشنویم|بشنوه)";
 
 const YES = new RegExp(
     `${NOUN}(?:\\s+\\S+){0,3}?\\s*${VERB}` +
@@ -110,6 +123,69 @@ function detectRequest(text) {
     if (YES.test(value)) return "yes";
 
     return null;
+
+}
+
+// ======================================================
+// VOICE GENDER
+//   «با صدای زن» / «ویس دخترونه بده» / «female voice»  → "female"
+//   «با صدای مرد» / «ویس مردونه»                       → "male"
+//   چیزی نگفت → null (همون صدای پیش‌فرض)
+//   اگه هر دو رو گفت، آخرین چیزی که گفته حساب می‌شه
+// ======================================================
+
+const FEMALE_WORDS = "(?:زن|زنانه|زنونه|زنا|زنها|خانم|خانوم|خانما|دختر|دخترانه|دخترونه|دخترا|مونث|female|woman|girl)";
+
+const MALE_WORDS = "(?:مرد|مردانه|مردونه|مردا|آقا|آقایون|پسر|پسرانه|پسرونه|پسرا|مذکر|male|man|boy)";
+
+function genderRegex(words) {
+
+    return new RegExp(
+        `(?:صدا(?:ی|ت)?|ویس(?:ی)?|voice)\\s*(?:یه\\s*|یک\\s*|ی\\s*)?(?:صدای\\s*)?(?<![\\p{L}])${words}(?![\\p{L}])` +
+        `|(?<![\\p{L}])${words}\\s*(?:ویس|صدا|voice)`,
+        "giu"
+    );
+
+}
+
+const FEMALE_VOICE = genderRegex(FEMALE_WORDS);
+
+const MALE_VOICE = genderRegex(MALE_WORDS);
+
+function detectGender(text) {
+
+    const value = prep(text);
+
+    if (!value) return null;
+
+    let femaleAt = -1;
+
+    let maleAt = -1;
+
+    for (const m of value.matchAll(FEMALE_VOICE)) femaleAt = m.index;
+
+    for (const m of value.matchAll(MALE_VOICE)) maleAt = m.index;
+
+    if (femaleAt < 0 && maleAt < 0) return null;
+
+    return femaleAt > maleAt ? "female" : "male";
+
+}
+
+// آیا این آدم اجازه‌ی انتخاب نوع صدا رو داره؟ (پیش‌فرض: فقط مالک)
+function genderAllowed(isOwner) {
+
+    return VOICE.GENDER_FOR_ALL || Boolean(isOwner);
+
+}
+
+function voiceNameFor(gender) {
+
+    if (gender === "female") return VOICE.VOICE_NAME_FEMALE;
+
+    if (gender === "male") return VOICE.VOICE_NAME_MALE;
+
+    return VOICE.VOICE_NAME;
 
 }
 
@@ -207,7 +283,8 @@ function pcmToOgg(pcm, rate) {
 }
 
 // متن → { ogg, seconds } یا null
-async function synthesize(text) {
+// options.gender: "female" | "male" | null
+async function synthesize(text, options = {}) {
 
     const spoken = speakable(text);
 
@@ -218,7 +295,7 @@ async function synthesize(text) {
     }
 
     const audio = await askGeminiSpeech(`${VOICE.STYLE}: ${spoken}`, {
-        voiceName: VOICE.VOICE_NAME,
+        voiceName: voiceNameFor(options.gender),
         languageCode: VOICE.LANGUAGE
     });
 
@@ -388,7 +465,7 @@ async function speak(token, chatId, text, options = {}) {
 
         }
 
-        const audio = await synthesize(text);
+        const audio = await synthesize(text, { gender: options.gender });
 
         if (!audio) {
 
@@ -418,6 +495,12 @@ module.exports = {
     diagnose,
 
     detectRequest,
+
+    detectGender,
+
+    genderAllowed,
+
+    voiceNameFor,
 
     spontaneousOffer,
 

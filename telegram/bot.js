@@ -40,6 +40,8 @@ const profiler = require("./roboProfiler");
 
 const voice = require("./roboVoice");
 
+const format = require("./roboFormat");
+
 const search = require("./roboSearch");
 
 console.log("🔥 TELEGRAM ROBO BOT LOADED");
@@ -440,18 +442,60 @@ async function resolveName(chatId, userId, from) {
 
 async function sendOut(chatId, text, options = {}) {
 
-    const params = {};
+    // متن مرتب می‌شه (پاراگراف‌بندی)، کد و پرامپت می‌ره توی بلاک کدِ قابل‌کپی
+    // و پیام‌های خیلی بلند بدون خراب شدن بلاک کد تکه‌تکه می‌شن
+    const parts = format.formatForTelegram(text);
 
-    if (options.replyTo) {
-        params.reply_to_message_id = options.replyTo;
-        params.allow_sending_without_reply = true;
+    // چیزی برای فرمت کردن نبود: همون رفتار قدیمی
+    if (!parts.length) {
+        parts.push({ html: null, plain: String(text).slice(0, 4000) });
     }
 
-    if (options.threadId) {
-        params.message_thread_id = options.threadId;
+    let first = null;
+
+    for (let i = 0; i < parts.length; i++) {
+
+        const params = {};
+
+        // فقط پیام اول ریپلای می‌شه؛ بقیه‌ی تکه‌ها پشتش میان
+        if (i === 0 && options.replyTo) {
+            params.reply_to_message_id = options.replyTo;
+            params.allow_sending_without_reply = true;
+        }
+
+        if (options.threadId) {
+            params.message_thread_id = options.threadId;
+        }
+
+        let sent;
+
+        try {
+
+            sent = parts[i].html
+                ? await bot.sendMessage(chatId, parts[i].html, Object.assign({ parse_mode: "HTML" }, params))
+                : await bot.sendMessage(chatId, parts[i].plain, params);
+
+        }
+        catch (error) {
+
+            // تلگرام فرمت HTML رو نپذیرفت: همون متن رو ساده بفرست
+            if (!parts[i].html || !/parse entities|can't parse|unsupported start tag/i.test(String(error.message))) {
+                throw error;
+            }
+
+            console.log("⚠️ HTML SEND FAILED, SENDING PLAIN:", error.message);
+
+            sent = await bot.sendMessage(chatId, parts[i].plain, params);
+
+        }
+
+        if (!first) first = sent;
+
+        if (i < parts.length - 1) await sleep(500);
+
     }
 
-    return bot.sendMessage(chatId, String(text).slice(0, 4000), params);
+    return first;
 
 }
 
@@ -1487,7 +1531,8 @@ async function buildOwnerContext(text) {
 
 }
 
-async function doRelay(relay, people) {
+// خروجی: false (نشد) | true (متن رفت) | "voice" (ویس رفت) | "voice_failed" (ویس نشد؛ چیزی توی گروه نرفت)
+async function doRelay(relay, people, voiceOptions = {}) {
 
     try {
 
@@ -1499,6 +1544,59 @@ async function doRelay(relay, people) {
         if (!known.some(g => String(g.chatId) === target)) return false;
 
         return await enqueueResult(target, async () => {
+
+            // مالک ویس خواسته: اگه ویس نشد، متن رو توی گروه نمی‌ذاریم؛ خودش تصمیم بگیره
+            if (relay.voice) {
+
+                if (!voice.isEnabled()) return "voice_failed";
+
+                const stopRecording = startTyping(target, undefined, "record_voice");
+
+                let sentVoice = null;
+
+                try {
+
+                    await sleep(rand(900, 1800));
+
+                    sentVoice = await voice.speak(TOKEN, target, relay.text, {
+                        replyTo: relay.replyTo || null,
+                        requested: true,
+                        gender: voiceOptions.gender || null
+                    });
+
+                }
+                finally {
+
+                    stopRecording();
+
+                }
+
+                if (!sentVoice) return "voice_failed";
+
+                st(target).lastBotAt = Date.now();
+
+                st(target).lastVoiceAt = Date.now();
+
+                await saveGroupMessage({
+                    chatId: target,
+                    messageId: sentVoice.message_id,
+                    userId: String(botInfo.id || "bot"),
+                    username: botInfo.username,
+                    name: "روبو",
+                    text: `🎙 ${relay.text}`,
+                    replyToMessageId: relay.replyTo || null,
+                    isBot: true
+                });
+
+                for (const person of findMentionedPeople(relay.text, people)) {
+                    openEngage(target, person.userId);
+                }
+
+                console.log("🌉🎙 VOICE RELAYED TO GROUP:", target, voiceOptions.gender || "default");
+
+                return "voice";
+
+            }
 
             const stop = startTyping(target);
 
@@ -1672,12 +1770,21 @@ async function respond(job) {
     // ویس: requested = طرف خودش ویس خواسته | offered = روبو اگه خواست می‌تونه ویس بده
     const voiceAsk = direct ? voice.detectRequest(cleanText) : null;
 
+    // «با صدای زن / مرد»: فقط وقتی مالک (یا هر کسی که اجازه داده شده) خواسته باشه
+    const voiceGender = direct && voice.genderAllowed(info.isOwner)
+        ? voice.detectGender(cleanText)
+        : null;
+
+    // کد یا پرامپت خواسته؟ (فقط یه یادآوری به مدل که توی بلاک کد بذارتش)
+    const codeAsk = direct && format.wantsCode(cleanText);
+
     let voiceMode = "";
 
     if (voice.isEnabled() && (!ownerPrivate || voiceAsk === "yes") && voiceAsk !== "no" && info.kind !== "join") {
 
         if (voiceAsk === "yes") {
-            voiceMode = "requested";
+            // مالک توی پیوی: ممکنه بخواد توی گروه ویس بدی یا برای خودش
+            voiceMode = ownerPrivate ? "owner" : "requested";
         }
         else if (
             !SAD_TEXT.test(String(info.text || "").replace(/\u200c/g, " ")) &&
@@ -1798,6 +1905,8 @@ let web = null;
             mood,
             silenceMin: info.silenceMin,
             voiceMode,
+            voiceGender,
+            codeAsk,
             web
         });
 
@@ -1830,11 +1939,18 @@ let web = null;
     // پیام مالک (پیوی) به گروه؛ فقط وقتی مالک توی پیوی باشه
     if (decision.relay && ownerPrivate) {
 
-        const ok = await doRelay(decision.relay, ownerCtx.people);
+        const ok = await doRelay(decision.relay, ownerCtx.people, { gender: voiceGender });
 
         if (!ok) {
 
             decision.text = "نتونستم توی اون گروه پیام بفرستم. شاید از گروه دراومدم یا اجازه‌ی نوشتن ندارم.";
+
+        }
+        else if (ok === "voice_failed") {
+
+            const preview = String(decision.relay.text).slice(0, 300);
+
+            decision.text = `ویسش درست نشد، برای همین چیزی توی گروه نذاشتم. (شاید متنش بلنده یا لینک و لاتین داره، یا مدل صدا خطا داد.)\n\nمتنش این بود:\n«${preview}»\n\nبگو همینو متنی بذارم یا یه جور دیگه بنویسمش؟`;
 
         }
 
@@ -1924,9 +2040,12 @@ let web = null;
 
     let voiceFailed = false;
 
+    // طرف یا مالک ویس خواسته (مالک توی پیوی فقط وقتی مدل voice=true بذاره؛ ممکنه برای گروه باشه یا فقط سوال بپرسه)
+    const askedForVoice = voiceMode === "requested" || voiceMode === "owner";
+
     const useVoice = Boolean(decision.text) && !decision.relay && (
         voiceMode === "requested" ||
-        (voiceMode === "offered" && decision.voice === true)
+        ((voiceMode === "offered" || voiceMode === "owner") && decision.voice === true)
     );
 
     if (useVoice) {
@@ -1940,7 +2059,8 @@ let web = null;
             sentVoice = await voice.speak(TOKEN, chatId, decision.text, {
                 replyTo,
                 threadId: info.threadId,
-                requested: voiceMode === "requested"
+                requested: askedForVoice,
+                gender: voiceGender
             });
 
         }
@@ -1951,7 +2071,7 @@ let web = null;
         }
 
         // اگه ویس نشد (TTS خطا داد، متن طولانی بود...) پایین متن عادی می‌فرسته
-        if (!sentVoice && voiceMode === "requested") voiceFailed = true;
+        if (!sentVoice && askedForVoice) voiceFailed = true;
 
         if (sentVoice) {
 
