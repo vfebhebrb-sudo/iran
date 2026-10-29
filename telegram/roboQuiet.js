@@ -1,194 +1,144 @@
 // ======================================================
-// ROBO QUIET — حالت «نظاره‌گر» (ساکت شدن و برگشتن)
+// ROBO QUIET — حالت «نظاره‌گر»
 //
-//  «روبو فعلاً ساکت باش / وارد بحث نشو / چیزی نگو»  → فقط می‌خونه
-//  «روبو بیا / برگرد / حرف بزن / ساکت نباش»          → دوباره حرف می‌زنه
+// وقتی کسی توی گروه به روبو بگه «فعلاً وارد بحث نشو / ساکت باش / چیزی نگو»،
+// روبو توی همون گروه کاملاً ساکت می‌شه و فقط پیام‌ها رو می‌خونه (حافظه و
+// پروفایل اعضا مثل قبل به‌روز می‌شه، ولی هیچ جواب، ریکشن، استیکر، ویس،
+// خوش‌آمد یا شروع بحثی نمی‌فرسته).
 //
-// bot.js از این فایل اینا رو صدا می‌زنه:
-//   detectCommand(text)  → "observe" | "resume" | null
-//   isObserving(chatId)  → true/false
-//   start(chatId, userId) / stop(chatId) / load(chatIds)
-//   QUIET.ANSWER_DIRECT_CALLS
+// برگشتنش: «روبو بیا / حرف بزن / وارد بحث شو / ساکت نباش».
 //
-// وضعیتِ «ساکت» توی دیتابیس هم ذخیره می‌شه (setGroupObserving توی bot.js)،
-// پس بعد از ری‌استارت هم می‌مونه. این فایل به دیتابیس وصل نمی‌شه؛
-// فقط وقتی ساکت‌بودن تموم بشه (برگشت خودکار) یه بار سرویس رو صدا می‌زنه.
+// فقط تشخیص دستور و نگه‌داشتنِ وضعیتِ هر گروه اینجاست؛
+// ذخیره‌ی دائمی (که بعد از ری‌استارت هم بمونه) توی roboMemoryService انجام می‌شه.
 // ======================================================
 
 const QUIET = {
 
-    // false = وقتی ساکته حتی اگه صداش بزنن جواب نمی‌ده، فقط «روبو بیا» بیدارش می‌کنه
-    // true  = خودش وارد بحث نمی‌شه ولی اگه مستقیم صداش بزنن جواب می‌ده
-    ANSWER_DIRECT_CALLS: false,
+    // بعد از این‌قدر خودش برمی‌گرده؛ null = تا وقتی کسی صداش نکرده ساکت می‌مونه
+    // (مثلاً ۳ ساعت: 3 * 60 * 60 * 1000)
+    AUTO_RESUME_MS: null,
 
-    // بعد از این‌همه ساعت خودش برمی‌گرده تا یادش نره و برای همیشه ساکت نمونه
-    // (۰ = برگشت خودکار نداشته باش)
-    AUTO_RESUME_HOURS: 6,
-
-    // دستور باید کوتاه باشه؛ وسط یه پیام بلند اتفاقی ساکتش نکنه
-    MAX_OBSERVE_LEN: 70,
-    MAX_RESUME_LEN: 60
+    // true = حتی وقتی ساکته، اگه مستقیم صداش بزنن (اسمش یا ریپلای) جواب می‌ده
+    // false = فقط به دستور «برگرد» جواب می‌ده
+    ANSWER_DIRECT_CALLS: false
 
 };
 
 // ======================================================
-// STATE
+// تشخیص دستور
 // ======================================================
 
-// chatId → { since: ms, by: userId|null }
+// همون یکدست‌سازیِ bot.js (ی/ک عربی، اعراب، نیم‌فاصله، علامت‌ها)
+function norm(text) {
+
+    return String(text || "")
+        .toLowerCase()
+        .replace(/[يى]/g, "ی")
+        .replace(/ك/g, "ک")
+        .replace(/[\u064B-\u065F\u0640]/g, "")
+        .replace(/\u200c/g, " ")
+        .replace(/[^\p{L}\p{N}@_\s]/gu, " ")
+        .replace(/\s+/g, " ")
+        .trim();
+
+}
+
+const OBSERVE = new RegExp(
+    [
+        // «وارد بحث نشو»، «دخالت نکن»، «قاطی نشو»
+        "(?:وارد|قاطی|دخالت|پا)\\s?(?:بحث|گفتگو|صحبت|چت|ما|اینجا)?\\s?(?:نشو|نشی|نشین|نکن|نکنی|نکنید)",
+        // «ساکت باش / ساکت شو / ساکت بمون / ساکت باشی»
+        "ساکت\\s?(?:باش|شو|بشین|بمون|بمونی|بشی)",
+        // فقط وقتی کل پیام همین باشه («روبو ساکت»)؛ «چرا ساکتی» رو نمی‌گیره
+        "^(?:فعلا\\s)?ساکت$",
+        "سکوت\\s?(?:کن|کنی|اختیار)",
+        "حرف\\s?(?:نزن|نزنی)",
+        "چیزی\\s?نگو",
+        "(?:هیچی|هیچ\\s?چی)\\s?نگو",
+        "نظاره\\s?گر",
+        "فقط\\s?(?:نگاه|ببین|تماشا|بخون|گوش)\\s?(?:کن|کنی|باش)",
+        "خفه\\s?(?:شو|باش)"
+    ].join("|"),
+    "u"
+);
+
+const RESUME = new RegExp(
+    [
+        "ساکت\\s?نباش",
+        "حرف\\s?بز(?:ن|نی)",
+        "(?:وارد|قاطی)\\s?(?:بحث\\s|گفتگو\\s|صحبت\\s)?(?:شو|بشو|بشی|بشین)",
+        "بیا(?:ین)?",
+        "برگرد",
+        "برگشتی",
+        "آزاد(?:ی|\\s?شدی)",
+        "دیگه\\s?ساکت",
+        "می\\s?تونی\\s?حرف\\s?بز"
+    ].join("|"),
+    "u"
+);
+
+// text = متن پیام بعد از برداشتن اسمِ روبو
+// برمی‌گردونه "observe" | "resume" | null
+function detectCommand(text) {
+
+    const value = norm(text);
+
+    if (!value || value.length > 80) return null;
+
+    // اول «ساکت شو»، بعد «برگرد»؛ تا «ساکت نباش» و «وارد بحث نشو» اشتباه برعکس نشن
+    if (RESUME.test(value) && /ساکت\s?نباش|دیگه\s?ساکت/.test(value)) return "resume";
+
+    if (OBSERVE.test(value)) return "observe";
+
+    if (RESUME.test(value)) return "resume";
+
+    return null;
+
+}
+
+// ======================================================
+// وضعیت هر گروه
+// ======================================================
+
 const observing = new Map();
 
-function key(chatId) {
-    return String(chatId);
-}
-
-function start(chatId, userId) {
-
-    observing.set(key(chatId), {
-        since: Date.now(),
-        by: userId ? String(userId) : null
-    });
-
-}
-
-function stop(chatId) {
-
-    observing.delete(key(chatId));
-
-}
-
-// بعد از ری‌استارت: گروه‌هایی که توی دیتابیس «ساکت» بودن
 function load(chatIds) {
 
     for (const id of chatIds || []) {
 
-        if (!observing.has(key(id))) {
-            observing.set(key(id), { since: Date.now(), by: null });
-        }
+        observing.set(String(id), { since: Date.now(), by: null });
 
     }
-
-}
-
-function autoResume(chatId) {
-
-    stop(chatId);
-
-    console.log("🔊 OBSERVE AUTO-RESUME:", chatId);
-
-    // وضعیت دیتابیس هم صاف بشه (اگه سرویس در دسترس نبود مهم نیست)
-    try {
-
-        const service = require("../services/roboMemoryService");
-
-        if (service && typeof service.setGroupObserving === "function") {
-            service.setGroupObserving(chatId, false).catch(() => { });
-        }
-
-    }
-    catch (error) { /* مهم نیست */ }
 
 }
 
 function isObserving(chatId) {
 
-    const entry = observing.get(key(chatId));
+    const entry = observing.get(String(chatId));
 
     if (!entry) return false;
 
-    const hours = Number(QUIET.AUTO_RESUME_HOURS) || 0;
+    if (QUIET.AUTO_RESUME_MS && Date.now() - entry.since > QUIET.AUTO_RESUME_MS) {
 
-    if (hours > 0 && Date.now() - entry.since > hours * 3600 * 1000) {
-        autoResume(chatId);
+        observing.delete(String(chatId));
+
         return false;
+
     }
 
     return true;
 
 }
 
-// ======================================================
-// COMMAND DETECTION
-// ورودی همون متنیه که اسم روبو ازش برداشته شده (cleanMessage)
-// ======================================================
+function start(chatId, byUserId) {
 
-function normalize(text) {
-
-    return String(text || "")
-        .replace(/[\u064B-\u065F\u0670\u0640]/g, "")   // اعراب و کشیده
-        .replace(/ي/g, "ی")
-        .replace(/ك/g, "ک")
-        .replace(/ۀ/g, "ه")
-        .replace(/[\u200c\u200f\u200e]/g, " ")          // نیم‌فاصله
-        .replace(/\s+/g, " ")
-        .toLowerCase()
-        .trim();
+    observing.set(String(chatId), { since: Date.now(), by: byUserId || null });
 
 }
 
-// مرز کلمه‌ی فارسی/انگلیسی
-const B = "(?<![\\p{L}\\d])";
-const E = "(?![\\p{L}\\d])";
+function stop(chatId) {
 
-function rx(source) {
-    return new RegExp(source, "u");
-}
-
-// «ساکت نباش» و «حرف بزن» باید قبل از «ساکت باش» و «حرف نزن» بررسی بشن
-const RESUME = [
-
-    rx(`${B}ساکت\\s*(?:نباش|نشو|نمون|نشین|نباشی)${E}`),
-    rx(`${B}دیگه\\s*ساکت${E}`),
-    rx(`${B}(?:حرف|صحبت|چت)\\s*(?:بزن|کن|بزنی|کنی)${E}`),
-    rx(`${B}(?:بیا|بیاین|بیاید)${E}`),
-    rx(`${B}(?:برگرد|برگرده|برگشتی|برگشت)${E}`),
-    rx(`${B}بیدار\\s*شو${E}`),
-    rx(`${B}(?:بیا\\s*)?تو\\s*(?:بحث|جمع|گپ)\\s*(?:بیا|باش)${E}`),
-    rx(`${B}وارد\\s*بحث\\s*شو${E}`),
-    rx(`${B}نظاره\\s*گر\\s*(?:نباش|نشو)${E}`),
-    rx(`${B}(?:آزادی|ازادی)${E}`),
-    rx(`${B}(?:می\\s*تونی|میتونی)\\s*(?:حرف|صحبت)\\s*بزنی${E}`)
-
-];
-
-const OBSERVE = [
-
-    rx(`${B}ساکت\\s*(?:شو|باش|بشو|بمون|بشین|باشی|بشی)${E}`),
-    rx(`${B}(?:حرف|صحبت|چت)\\s*(?:نزن|نکن|نزنی|نکنی)${E}`),
-    rx(`${B}(?:هیچی|چیزی|هیچ\\s*چی|چیز)\\s*(?:نگو|نگی|ننویس)${E}`),
-    rx(`${B}(?:وارد|تو|توی)\\s*بحث\\s*(?:نشو|نیا|نیای|نباش)${E}`),
-    rx(`${B}(?:دخالت|فضولی|پارازیت)\\s*نکن${E}`),
-    rx(`${B}فقط\\s*(?:بخون|نگاه\\s*کن|ببین|تماشا\\s*کن)${E}`),
-    rx(`${B}نظاره\\s*گر\\s*(?:شو|باش)${E}`),
-    rx(`${B}(?:فعلا|فعلاً)\\s*(?:نگو|بسه|ساکت)${E}`),
-    rx(`${B}(?:صدات|صدات\\s*رو)\\s*نبینم${E}`)
-
-];
-
-// «روبو بهش بگو ساکت شو» یعنی خطاب به یه نفر دیگه‌ست، نه خود روبو
-const ABOUT_SOMEONE_ELSE = rx(`${B}(?:بهش|بهشون|بهشو|براش|واسش|بگو|بگین|بنویس)${E}`);
-
-function detectCommand(text) {
-
-    const value = normalize(text);
-
-    if (!value) return null;
-
-    // برگشتن: زود و ساده‌تر پذیرفته می‌شه (فقط وقتی ساکته استفاده می‌شه)
-    if (value.length <= QUIET.MAX_RESUME_LEN && RESUME.some(re => re.test(value))) {
-        return "resume";
-    }
-
-    if (value.length > QUIET.MAX_OBSERVE_LEN) return null;
-
-    // سوال («می‌تونی ساکت بشی؟») دستور نیست
-    if (/[?؟]/.test(value)) return null;
-
-    if (ABOUT_SOMEONE_ELSE.test(value)) return null;
-
-    if (OBSERVE.some(re => re.test(value))) return "observe";
-
-    return null;
+    observing.delete(String(chatId));
 
 }
 
@@ -207,6 +157,6 @@ module.exports = {
     load,
 
     // برای تست
-    normalize
+    norm
 
 };
