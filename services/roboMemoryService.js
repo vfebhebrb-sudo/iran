@@ -225,10 +225,7 @@ const GroupChatSchema = new mongoose.Schema({
 
     firstSeenAt: { type: Date, default: Date.now },
 
-    lastSeenAt: { type: Date, default: Date.now },
-
-    // حالت «نظاره‌گر»: کسی گفته روبو وارد بحث نشه و فقط بخونه
-    observing: { type: Boolean, default: false }
+    lastSeenAt: { type: Date, default: Date.now }
 
 });
 
@@ -1061,53 +1058,6 @@ async function getKnownGroups(limit = 15) {
 
 }
 
-// حالت «نظاره‌گر» (ساکت) برای یه گروه؛ بعد از ری‌استارت هم می‌مونه
-async function setGroupObserving(chatId, observing) {
-
-    try {
-
-        const Model = await getGroupChatModel();
-
-        await Model.updateOne(
-            { chatId: String(chatId) },
-            { $set: { observing: Boolean(observing) }, $setOnInsert: { firstSeenAt: new Date() } },
-            { upsert: true }
-        );
-
-        return true;
-
-    }
-    catch (error) {
-
-        console.log("❌ GROUP OBSERVING SET ERROR:", error.message);
-
-        return false;
-
-    }
-
-}
-
-async function getObservingChatIds() {
-
-    try {
-
-        const Model = await getGroupChatModel();
-
-        const rows = await Model.find({ observing: true }).select("chatId").lean();
-
-        return rows.map(row => String(row.chatId));
-
-    }
-    catch (error) {
-
-        console.log("❌ GROUP OBSERVING READ ERROR:", error.message);
-
-        return [];
-
-    }
-
-}
-
 module.exports = {
 
     getRoboMemoryModel,
@@ -1164,10 +1114,6 @@ module.exports = {
 
     touchGroupChat,
 
-    getKnownGroups,
-
-    setGroupObserving,
-
-    getObservingChatIds
+    getKnownGroups
 
 };
