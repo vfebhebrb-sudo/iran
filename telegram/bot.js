@@ -494,6 +494,26 @@ async function sendOut(chatId, text, options = {}) {
             params.message_thread_id = options.threadId;
         }
 
+        // پیام وضعیتِ «دارم سرچ می‌کنم...» همین‌جا به جواب تبدیل می‌شه
+        if (i === 0 && options.editMessageId) {
+
+            const edited = await editInPlace(chatId, options.editMessageId, parts[0]);
+
+            if (edited) {
+
+                first = edited;
+
+                if (i < parts.length - 1) await sleep(500);
+
+                continue;
+
+            }
+
+            // ادیت نشد (مثلاً پیام پاک شده): پیام قدیمی رو جمع کن و جواب رو عادی بفرست
+            bot.deleteMessage(chatId, options.editMessageId).catch(() => { });
+
+        }
+
         let sent;
 
         try {
@@ -523,6 +543,95 @@ async function sendOut(chatId, text, options = {}) {
     }
 
     return first;
+
+}
+
+// ======================================================
+// STATUS MESSAGE — «دارم سرچ می‌کنم...» که بعد به جواب تبدیل می‌شه
+// ======================================================
+
+// متن یه پیامِ فرستاده‌شده رو عوض می‌کنه؛ موفق نشد null برمی‌گردونه
+async function editInPlace(chatId, messageId, part) {
+
+    const base = { chat_id: chatId, message_id: messageId };
+
+    const done = result => (result && typeof result === "object" ? result : { message_id: messageId });
+
+    try {
+
+        return done(
+            part.html
+                ? await bot.editMessageText(part.html, Object.assign({ parse_mode: "HTML" }, base))
+                : await bot.editMessageText(part.plain, base)
+        );
+
+    }
+    catch (error) {
+
+        const message = String(error.message);
+
+        if (part.html && /parse entities|can't parse|unsupported start tag/i.test(message)) {
+
+            try {
+                return done(await bot.editMessageText(part.plain, base));
+            }
+            catch (second) { /* پایین لاگ می‌شه */ }
+
+        }
+
+        console.log("⚠️ EDIT FAILED:", message);
+
+        return null;
+
+    }
+
+}
+
+const SEARCH_STATUS_LINES = [
+    q => `🔎 یه لحظه صبر کن، دارم «${q}» رو سرچ می‌کنم...`,
+    q => `🔎 باشه، دارم «${q}» رو توی نت می‌گردم...`,
+    q => `🔎 دارم «${q}» رو چک می‌کنم، الان میگم...`,
+    q => `🔎 همین الان «${q}» رو سرچ می‌کنم، چند ثانیه...`
+];
+
+// تابعی که roboSearch درست قبل از سرچِ واقعی صدا می‌زنه
+function makeSearchAnnouncer(chatId, info, isPrivate, status) {
+
+    return async query => {
+
+        const shown = String(query || "").replace(/\s+/g, " ").trim().slice(0, 60);
+
+        if (!shown) return;
+
+        const params = {};
+
+        if (!isPrivate && info.messageId) {
+            params.reply_to_message_id = info.messageId;
+            params.allow_sending_without_reply = true;
+        }
+
+        if (info.threadId) params.message_thread_id = info.threadId;
+
+        const sent = await bot.sendMessage(chatId, pick(SEARCH_STATUS_LINES)(shown), params);
+
+        status.id = sent.message_id;
+
+        console.log("🔎 STATUS SENT:", sent.message_id, "|", shown);
+
+    };
+
+}
+
+// پیام وضعیت به جواب تبدیل نشد (ویس، ریکشن، ignore، خطا...): پاکش کن
+async function dropStatus(chatId, status) {
+
+    if (!status || !status.id) return;
+
+    const id = status.id;
+
+    status.id = null;
+
+    await bot.deleteMessage(chatId, id).catch(() => { });
 
 }
 
@@ -672,9 +781,10 @@ function nowInfo() {
                         ? "عصر"
                         : "شب";
 
+    // تاریخ امروز (شمسی + میلادی)؛ بدونش مدل نمی‌دونه «امروز» و «آخرین» یعنی کی
     return {
         hour,
-        text: `ساعت ${String(hour).padStart(2, "0")}:${minute} (${label})`
+        text: `${search.todayText()}، ساعت ${String(hour).padStart(2, "0")}:${minute} (${label})`
     };
 
 }
@@ -1871,6 +1981,25 @@ async function maybeSpark(group) {
 
 async function respond(job) {
 
+    // status.id وقتی پر می‌شه که پیامِ «دارم سرچ می‌کنم...» فرستاده شده باشه
+    const status = { id: null };
+
+    try {
+
+        return await respondCore(job, status);
+
+    }
+    finally {
+
+        // اگه پیام وضعیت به جواب تبدیل نشده بود (ویس، ریکشن، ignore، خطا) جمعش کن
+        await dropStatus(job.chatId, status);
+
+    }
+
+}
+
+async function respondCore(job, status) {
+
     const { chatId, info, trigger, cleanText, newName } = job;
 
     // حالت نظاره‌گر: کارهایی که قبل از ساکت شدن توی صف مونده بودن هم چیزی نمی‌فرستن
@@ -1999,7 +2128,10 @@ let web = null;
                 chatId,
                 text: cleanText,
                 recent,
-                siteTopic: SITE_WORDS.test(cleanText)
+                siteTopic: SITE_WORDS.test(cleanText),
+                onSearch: hard
+                    ? makeSearchAnnouncer(chatId, info, isPrivate, status)
+                    : null
             });
 
         }
@@ -2055,8 +2187,11 @@ let web = null;
 
             await sendOut(chatId, pick(FAIL_LINES), {
                 replyTo: isPrivate ? null : info.messageId,
-                threadId: info.threadId
+                threadId: info.threadId,
+                editMessageId: status.id
             });
+
+            status.id = null;
 
         }
 
@@ -2210,6 +2345,9 @@ let web = null;
 
             voiceSent = true;
 
+            // ویس رو نمی‌شه جای پیام متنی ادیت کرد؛ پیام «دارم سرچ می‌کنم» پاک می‌شه
+            await dropStatus(chatId, status);
+
             sentAny = true;
 
             state.lastBotAt = Date.now();
@@ -2237,12 +2375,16 @@ let web = null;
         const textOut = decision.text + search.sourcesLine(web) +
             (voiceFailed ? "\n\n🎙 ویسِ این یکی درست نشد، برات متنی نوشتم" : "");
 
-        await humanWait(chatId, info.threadId, decision.text.length, direct);
+        // پیام وضعیت داریم: جواب آماده‌ست و همون پیام به جواب تبدیل می‌شه؛ مکثِ اضافه نمی‌خواد
+        if (!status.id) await humanWait(chatId, info.threadId, decision.text.length, direct);
 
         const sent = await sendOut(chatId, textOut, {
             replyTo,
-            threadId: info.threadId
+            threadId: info.threadId,
+            editMessageId: status.id
         });
+
+        status.id = null;
 
         console.log("✅ SENT:", sent.message_id);
 
